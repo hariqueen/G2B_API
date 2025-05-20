@@ -3,7 +3,9 @@ name: Run Data Collection
 on:
   schedule:
     # 2주마다 월요일 오전 1시에 실행 (UTC 시간 기준)
-    - cron: '0 1 */14 * *'
+    # - cron: '0 1 */14 * *'
+    # 매일 아침 8시 30분(KST) = 매일 23시 30분(UTC)
+    - cron: '30 23 * * *'
   workflow_dispatch:  # 수동으로도 실행 가능
 
 jobs:
@@ -29,3 +31,47 @@ jobs:
       
       - name: Run data collection script
         run: python main.py
+      
+      # 성공 시에도 이메일 알림 보내기
+      - name: Send Gmail notification on success
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "[성공] G2B 데이터 수집 완료"
+          body: |
+            G2B 데이터 수집이 성공적으로 완료되었습니다.
+            
+            실행 시간: ${{ github.event.repository.updated_at }}
+            저장소: ${{ github.repository }}
+            워크플로우: ${{ github.workflow }}
+            
+            자세한 내용은 다음 링크에서 확인할 수 있습니다:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: hariqueen98@gmail.com
+          from: GitHub Actions
+          
+      # 실패 시 이메일 알림 보내기 (기본 알림 외에 추가 정보 포함)
+      - name: Send Gmail notification on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "[실패] G2B 데이터 수집 오류"
+          body: |
+            G2B 데이터 수집 중 오류가 발생했습니다.
+            
+            실행 시간: ${{ github.event.repository.updated_at }}
+            저장소: ${{ github.repository }}
+            워크플로우: ${{ github.workflow }}
+            
+            자세한 내용은 다음 링크에서 확인할 수 있습니다:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: hariqueen98@gmail.com
+          from: GitHub Actions
