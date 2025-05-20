@@ -1,10 +1,26 @@
 import os
+import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # API 키 설정
 BID_API_KEY = os.getenv("BID_API_KEY")
+
+# 날짜 범위 자동 계산 함수
+def get_date_range():
+    today = datetime.datetime.now()
+    
+    # 종료일 = 오늘
+    end_date = today.strftime("%Y%m%d")
+    
+    # 시작일 = 14일 전
+    start_date = (today - datetime.timedelta(days=14)).strftime("%Y%m%d")
+    
+    return start_date, end_date
+
+# 날짜 범위 자동 계산
+start_date, end_date = get_date_range()
 
 # 사용할 입찰 API 목록 (현재는 '용역' 카테고리 기준)
 BID_ENDPOINTS = [
@@ -16,8 +32,8 @@ BID_ENDPOINTS = [
 
 # 🧾 기본 검색 설정값
 DEFAULT_INPUT = {
-    "start_date": "20250301",
-    "end_date": "20250401",
+    "start_date": start_date,  # 자동 계산된 시작일
+    "end_date": end_date,      # 자동 계산된 종료일
     "keyword": "콜센터"
 }
 
