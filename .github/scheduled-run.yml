@@ -1,0 +1,31 @@
+name: Run Data Collection
+
+on:
+  schedule:
+    # 2주마다 월요일 오전 1시에 실행 (UTC 시간 기준)
+    - cron: '0 1 */14 * *'
+  workflow_dispatch:  # 수동으로도 실행 가능
+
+jobs:
+  collect-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Create Firebase credentials file
+        run: |
+          echo '${{ secrets.FIREBASE_CREDENTIALS }}' > g2b-db-6aae9-firebase-adminsdk-fbsvc-0e3b1ce560.json
+      
+      - name: Run data collection script
+        run: python main.py
