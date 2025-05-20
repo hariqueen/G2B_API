@@ -15,7 +15,7 @@ def get_date_range():
     end_date = today.strftime("%Y%m%d")
     
     # 시작일 = 14일 전
-    start_date = (today - datetime.timedelta(days=14)).strftime("%Y%m%d")
+    start_date = (today - datetime.timedelta(days=1)).strftime("%Y%m%d")
     
     return start_date, end_date
 
