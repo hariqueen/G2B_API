@@ -254,16 +254,39 @@ def main():
     if all_data:
         print(f"\n✅ 총 {len(all_data)}건 수집 완료")
         
+        # 결과 정보를 파일로 저장 (GitHub Actions에서 읽기 위해)
+        result_info = {
+            "total_count": len(all_data),
+            "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "bid_details": [
+                {
+                    "공고명": item["공고명"],
+                    "채권자명": item["채권자명"]
+                } for item in all_data
+            ]
+        }
+        
+        import json
+        with open('collection_result.json', 'w', encoding='utf-8') as f:
+            json.dump(result_info, f, ensure_ascii=False, indent=2)
+        
         # Firebase에 데이터 업로드
         upload_to_firebase(all_data)
         
         # 기존 데이터에 대한 user_inputs 생성
         create_missing_user_inputs()
     else:
+        # 수집된 데이터가 없을 때도 파일 생성
+        result_info = {
+            "total_count": 0,
+            "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "bid_details": []
+        }
+        
+        import json
+        with open('collection_result.json', 'w', encoding='utf-8') as f:
+            json.dump(result_info, f, ensure_ascii=False, indent=2)
+        
         print("⚠️ 수집된 데이터가 없습니다.")
 
     print_execution_time(start_time)
-
-
-if __name__ == "__main__":
-    main()

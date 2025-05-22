@@ -2,10 +2,8 @@ name: Run Data Collection
 
 on:
   schedule:
-    # 2주마다 월요일 오전 1시에 실행 (UTC 시간 기준)
-    # - cron: '0 1 */14 * *'
-    # 매일 아침 8시 30분(KST) = 매일 23시 30분(UTC)
-    - cron: '30 23 * * *'
+    # 매일 아침 8시(KST) = 매일 23시(UTC)
+    - cron: '0 23 * * *'
   workflow_dispatch:  # 수동으로도 실행 가능
 
 jobs:
@@ -32,6 +30,35 @@ jobs:
       - name: Run data collection script
         run: python main.py
       
+      # 수집 결과 파일 읽기
+      - name: Read collection results
+        id: read_results
+        if: success()
+        run: |
+          if [ -f collection_result.json ]; then
+            echo "TOTAL_COUNT=$(jq -r '.total_count' collection_result.json)" >> $GITHUB_OUTPUT
+            echo "COLLECTION_DATE=$(jq -r '.collection_date' collection_result.json)" >> $GITHUB_OUTPUT
+            
+            # 공고명 목록을 문자열로 변환
+            BID_LIST=""
+            if [ "$(jq -r '.total_count' collection_result.json)" -gt 0 ]; then
+              BID_LIST=$(jq -r '.bid_details[] | "• \(.공고명) (\(.채권자명))"' collection_result.json)
+            else
+              BID_LIST="수집된 공고가 없습니다."
+            fi
+            
+            # 여러 줄 문자열을 GitHub Output에 저장
+            {
+              echo 'BID_LIST<<EOF'
+              echo "$BID_LIST"
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
+          else
+            echo "TOTAL_COUNT=0" >> $GITHUB_OUTPUT
+            echo "COLLECTION_DATE=$(date)" >> $GITHUB_OUTPUT
+            echo "BID_LIST=결과 파일을 찾을 수 없습니다." >> $GITHUB_OUTPUT
+          fi
+      
       # 성공 시에도 이메일 알림 보내기
       - name: Send Gmail notification on success
         if: success()
@@ -41,20 +68,25 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "[성공] G2B 데이터 수집 완료"
+          subject: "[G2B 수집완료] ${{ steps.read_results.outputs.TOTAL_COUNT }}건 수집"
           body: |
-            G2B 데이터 수집이 성공적으로 완료되었습니다.
+            🎉 G2B 입찰 데이터 수집이 완료되었습니다!
             
-            실행 시간: ${{ github.event.repository.updated_at }}
-            저장소: ${{ github.repository }}
-            워크플로우: ${{ github.workflow }}
+            📊 수집 결과:
+            • 총 수집 공고: ${{ steps.read_results.outputs.TOTAL_COUNT }}건
+            • 수집 완료 시간: ${{ steps.read_results.outputs.COLLECTION_DATE }}
             
-            자세한 내용은 다음 링크에서 확인할 수 있습니다:
-            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            📋 수집된 공고 목록:
+            ${{ steps.read_results.outputs.BID_LIST }}
+            
+            🔗 대시보드에서 확인하기: https://g2b.onrender.com
+            
+            ---
+            G2B 입찰 데이터 자동 수집 시스템
           to: hariqueen98@gmail.com
-          from: GitHub Actions
+          from: G2B 수집시스템
           
-      # 실패 시 이메일 알림 보내기 (기본 알림 외에 추가 정보 포함)
+      # 실패 시 이메일 알림 보내기
       - name: Send Gmail notification on failure
         if: failure()
         uses: dawidd6/action-send-mail@v3
@@ -63,15 +95,18 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "[실패] G2B 데이터 수집 오류"
+          subject: "[G2B 오류] 데이터 수집 실패"
           body: |
-            G2B 데이터 수집 중 오류가 발생했습니다.
+            ⚠️ G2B 데이터 수집 중 오류가 발생했습니다.
             
-            실행 시간: ${{ github.event.repository.updated_at }}
-            저장소: ${{ github.repository }}
-            워크플로우: ${{ github.workflow }}
+            • 실행 시간: ${{ github.event.repository.updated_at }}
+            • 워크플로우: ${{ github.workflow }}
             
-            자세한 내용은 다음 링크에서 확인할 수 있습니다:
-            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            🔗 대시보드 확인: https://g2b.onrender.com
+            
+            GitHub Actions 로그를 확인하여 문제를 해결해 주세요.
+            
+            ---
+            G2B 입찰 데이터 자동 수집 시스템
           to: hariqueen98@gmail.com
-          from: GitHub Actions
+          from: G2B 수집시스템
