@@ -58,7 +58,7 @@ class SearchConfig:
 
 
 
-# # 날짜 범위 수동 설정 
+# 날짜 범위 수동 설정 
 
 # import os
 # from dotenv import load_dotenv
@@ -70,7 +70,7 @@ class SearchConfig:
 
 # # 날짜 범위 수동 설정 (25년 5월 1일 ~ 5월 20일)
 # start_date = "20250501"
-# end_date = "20250520"
+# end_date = "20250528"
 
 # # 사용할 입찰 API 목록 (현재는 '용역' 카테고리 기준)
 # BID_ENDPOINTS = [
@@ -83,12 +83,11 @@ class SearchConfig:
 # # 🎯 검색할 키워드 목록 (순차적으로 실행됨)
 # SEARCH_KEYWORDS = [
 #     "콜센터",
-#     "CX", 
-#     "AICC",
-#     "IT",
-#     "ISP",
-#     "고객경험",
-#     "컨설팅"
+#     "헬프데스크", 
+#     "고객센터",
+#     "인바운드",
+#     "아웃바운드",
+#     "고객경험"
 # ]
 
 # # 🧾 기본 검색 설정값 (키워드는 SEARCH_KEYWORDS에서 가져옴)
