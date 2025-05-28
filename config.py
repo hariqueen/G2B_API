@@ -58,7 +58,7 @@ class SearchConfig:
 
 
 
-# 날짜 범위 수동 설정 
+# # 날짜 범위 수동 설정 
 
 # import os
 # from dotenv import load_dotenv
@@ -69,8 +69,8 @@ class SearchConfig:
 # BID_API_KEY = os.getenv("BID_API_KEY")
 
 # # 날짜 범위 수동 설정 (25년 5월 1일 ~ 5월 20일)
-# start_date = "20250501"
-# end_date = "20250528"
+# start_date = "20250401"
+# end_date = "20250430"
 
 # # 사용할 입찰 API 목록 (현재는 '용역' 카테고리 기준)
 # BID_ENDPOINTS = [
