@@ -28,15 +28,13 @@ BID_ENDPOINTS = [
     }
 ]
 
-# 🎯 검색할 키워드 목록 (순차적으로 실행됨)
 SEARCH_KEYWORDS = [
     "콜센터",
-    "CX", 
-    "AICC",
-    "IT",
-    "ISP",
-    "고객경험",
-    "컨설팅"
+    "헬프데스크", 
+    "고객센터",
+    "인바운드",
+    "아웃바운드",
+    "고객경험"
 ]
 
 # 🧾 기본 검색 설정값 (키워드는 SEARCH_KEYWORDS에서 가져옴)
@@ -59,6 +57,7 @@ class SearchConfig:
         return f"{self.keyword}_입찰정보_{self.start_date}_{self.end_date}_{timestamp}.csv"
 
 
+
 # # 날짜 범위 수동 설정 
 
 # import os
@@ -69,7 +68,7 @@ class SearchConfig:
 # # API 키 설정
 # BID_API_KEY = os.getenv("BID_API_KEY")
 
-# # 날짜 범위 수동 설정 (25년 1월 1일 ~ 2월 1일)
+# # 날짜 범위 수동 설정 (25년 5월 1일 ~ 5월 20일)
 # start_date = "20250501"
 # end_date = "20250520"
 
@@ -81,11 +80,22 @@ class SearchConfig:
 #     }
 # ]
 
-# # 🧾 기본 검색 설정값
+# # 🎯 검색할 키워드 목록 (순차적으로 실행됨)
+# SEARCH_KEYWORDS = [
+#     "콜센터",
+#     "CX", 
+#     "AICC",
+#     "IT",
+#     "ISP",
+#     "고객경험",
+#     "컨설팅"
+# ]
+
+# # 🧾 기본 검색 설정값 (키워드는 SEARCH_KEYWORDS에서 가져옴)
 # DEFAULT_INPUT = {
 #     "start_date": start_date,  # 수동 설정된 시작일
 #     "end_date": end_date,      # 수동 설정된 종료일
-#     "keyword": "콜센터"
+#     "keywords": SEARCH_KEYWORDS  # 키워드 리스트로 변경
 # }
 
 # # 기본 검색 조건 객체
@@ -93,7 +103,7 @@ class SearchConfig:
 #     def __init__(self, start_date=None, end_date=None, keyword=None):
 #         self.start_date = start_date or DEFAULT_INPUT["start_date"]
 #         self.end_date = end_date or DEFAULT_INPUT["end_date"]
-#         self.keyword = keyword or DEFAULT_INPUT["keyword"]
+#         self.keyword = keyword  # 단일 키워드
 
 #     def get_filename(self):
 #         from datetime import datetime
