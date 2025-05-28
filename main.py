@@ -1,5 +1,5 @@
 import time
-from config import BID_ENDPOINTS, SearchConfig, DEFAULT_INPUT
+from config import BID_ENDPOINTS, SearchConfig, DEFAULT_INPUT, SEARCH_KEYWORDS
 from data_processor import fetch_bid_data, process_bid_items
 from scsbid_client import get_scsbid_amount, get_openg_corp_info, get_bid_clsfc_no, get_nobid_reason
 import firebase_admin
@@ -208,15 +208,13 @@ def clean_company_info(info):
     
     return info
 
-def main():
-    start_time = time.time()
-
-    config = SearchConfig()
-    all_data = []
-
-    print("\n📦 입찰 + 개찰 통합 수집을 시작합니다...")
-    print(f"검색 조건: 기간 {config.start_date} ~ {config.end_date}, 키워드: '{config.keyword or '전체'}'")
-    print("※ 용역 카테고리만 수집합니다.")
+# 🔄 단일 키워드 처리 함수
+def process_single_keyword(keyword):
+    """단일 키워드에 대한 데이터 수집 및 처리"""
+    print(f"\n🎯 키워드 '{keyword}' 수집 시작...")
+    
+    config = SearchConfig(keyword=keyword)
+    keyword_data = []
 
     for api in BID_ENDPOINTS:
         try:
@@ -240,7 +238,7 @@ def main():
                 else:
                     nobid_reason = ""
 
-                all_data.append({
+                keyword_data.append({
                     **item,
                     "낙찰금액": amount,
                     "개찰업체정보": clean_corp_info,
@@ -248,30 +246,74 @@ def main():
                 })
 
         except Exception as e:
-            print(f"[{api['desc']}] 데이터 수집 중 오류 발생: {e}")
+            print(f"[{api['desc']}] 키워드 '{keyword}' 데이터 수집 중 오류 발생: {e}")
             print(f"[{api['desc']}] 다음 API로 이동합니다.")
 
-    if all_data:
-        print(f"\n✅ 총 {len(all_data)}건 수집 완료")
+    print(f"✅ 키워드 '{keyword}' 수집 완료: {len(keyword_data)}건")
+    return keyword_data
+
+def main():
+    start_time = time.time()
+
+    # 전체 수집 데이터 저장
+    all_collected_data = []
+    keyword_results = {}
+
+    print("\n📦 다중 키워드 입찰 + 개찰 통합 수집을 시작합니다...")
+    print(f"검색 조건: 기간 {DEFAULT_INPUT['start_date']} ~ {DEFAULT_INPUT['end_date']}")
+    print(f"검색 키워드: {', '.join(SEARCH_KEYWORDS)}")
+    print("※ 용역 카테고리만 수집합니다.")
+
+    # 🔄 각 키워드별로 순차 처리
+    for i, keyword in enumerate(SEARCH_KEYWORDS, 1):
+        print(f"\n{'='*50}")
+        print(f"🎯 [{i}/{len(SEARCH_KEYWORDS)}] 키워드: '{keyword}' 처리 중...")
+        print(f"{'='*50}")
         
+        keyword_data = process_single_keyword(keyword)
+        
+        # 키워드별 결과 저장
+        keyword_results[keyword] = len(keyword_data)
+        
+        # 전체 데이터에 추가
+        all_collected_data.extend(keyword_data)
+        
+        print(f"✅ 키워드 '{keyword}' 완료: {len(keyword_data)}건 수집")
+        
+        if keyword_data:
+            # 키워드별로 Firebase에 즉시 업로드
+            upload_to_firebase(keyword_data)
+
+    # 🎉 최종 결과 출력
+    print(f"\n{'='*50}")
+    print("🎉 전체 키워드 수집 완료!")
+    print(f"{'='*50}")
+    
+    total_count = len(all_collected_data)
+    print(f"📊 총 수집 데이터: {total_count}건")
+    
+    print("\n📈 키워드별 수집 현황:")
+    for keyword, count in keyword_results.items():
+        print(f"  • {keyword}: {count}건")
+
+    if all_collected_data:
         # 결과 정보를 파일로 저장 (GitHub Actions에서 읽기 위해)
         result_info = {
-            "total_count": len(all_data),
+            "total_count": total_count,
             "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "keyword_results": keyword_results,
+            "keywords": SEARCH_KEYWORDS,
             "bid_details": [
                 {
                     "공고명": item["공고명"],
                     "채권자명": item["채권자명"]
-                } for item in all_data
+                } for item in all_collected_data
             ]
         }
         
         import json
         with open('collection_result.json', 'w', encoding='utf-8') as f:
             json.dump(result_info, f, ensure_ascii=False, indent=2)
-        
-        # Firebase에 데이터 업로드
-        upload_to_firebase(all_data)
         
         # 기존 데이터에 대한 user_inputs 생성
         create_missing_user_inputs()
@@ -280,6 +322,8 @@ def main():
         result_info = {
             "total_count": 0,
             "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "keyword_results": keyword_results,
+            "keywords": SEARCH_KEYWORDS,
             "bid_details": []
         }
         
@@ -287,6 +331,6 @@ def main():
         with open('collection_result.json', 'w', encoding='utf-8') as f:
             json.dump(result_info, f, ensure_ascii=False, indent=2)
         
-        print("⚠️ 수집된 데이터가 없습니다.")
+        print("⚠️ 전체적으로 수집된 데이터가 없습니다.")
 
     print_execution_time(start_time)

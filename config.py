@@ -28,11 +28,22 @@ BID_ENDPOINTS = [
     }
 ]
 
-# 🧾 기본 검색 설정값
+# 🎯 검색할 키워드 목록 (순차적으로 실행됨)
+SEARCH_KEYWORDS = [
+    "콜센터",
+    "CX", 
+    "AICC",
+    "IT",
+    "ISP",
+    "고객경험",
+    "컨설팅"
+]
+
+# 🧾 기본 검색 설정값 (키워드는 SEARCH_KEYWORDS에서 가져옴)
 DEFAULT_INPUT = {
     "start_date": start_date,  # 자동 계산된 시작일
     "end_date": end_date,      # 자동 계산된 종료일
-    "keyword": "콜센터"
+    "keywords": SEARCH_KEYWORDS  # 키워드 리스트로 변경
 }
 
 # 기본 검색 조건 객체
@@ -40,7 +51,7 @@ class SearchConfig:
     def __init__(self, start_date=None, end_date=None, keyword=None):
         self.start_date = start_date or DEFAULT_INPUT["start_date"]
         self.end_date = end_date or DEFAULT_INPUT["end_date"]
-        self.keyword = keyword or DEFAULT_INPUT["keyword"]
+        self.keyword = keyword  # 단일 키워드
 
     def get_filename(self):
         from datetime import datetime
