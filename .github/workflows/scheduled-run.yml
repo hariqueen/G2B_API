@@ -30,7 +30,7 @@ jobs:
       - name: Run data collection script
         run: python main.py
       
-      # 수집 결과 파일 읽기
+      # 수집 결과 파일 읽기 (다중 키워드 지원)
       - name: Read collection results
         id: read_results
         if: success()
@@ -39,15 +39,31 @@ jobs:
             echo "TOTAL_COUNT=$(jq -r '.total_count' collection_result.json)" >> $GITHUB_OUTPUT
             echo "COLLECTION_DATE=$(jq -r '.collection_date' collection_result.json)" >> $GITHUB_OUTPUT
             
-            # 공고명 목록을 문자열로 변환
+            # 키워드별 수집 현황 생성
+            KEYWORD_RESULTS=""
+            if [ "$(jq -r '.keyword_results' collection_result.json)" != "null" ]; then
+              KEYWORD_RESULTS=$(jq -r '.keyword_results | to_entries[] | "• \(.key): \(.value)건"' collection_result.json)
+            fi
+            
+            # 공고명 목록을 문자열로 변환 (최대 20개로 제한)
             BID_LIST=""
             if [ "$(jq -r '.total_count' collection_result.json)" -gt 0 ]; then
-              BID_LIST=$(jq -r '.bid_details[] | "• \(.공고명) (\(.채권자명))"' collection_result.json)
+              BID_LIST=$(jq -r '.bid_details[:20][] | "• \(.공고명) (\(.채권자명))"' collection_result.json)
+              TOTAL_BIDS=$(jq -r '.total_count' collection_result.json)
+              if [ "$TOTAL_BIDS" -gt 20 ]; then
+                BID_LIST="$BID_LIST"$'\n'"... 외 $(($TOTAL_BIDS - 20))건 더"
+              fi
             else
               BID_LIST="수집된 공고가 없습니다."
             fi
             
             # 여러 줄 문자열을 GitHub Output에 저장
+            {
+              echo 'KEYWORD_RESULTS<<EOF'
+              echo "$KEYWORD_RESULTS"
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
+            
             {
               echo 'BID_LIST<<EOF'
               echo "$BID_LIST"
@@ -56,10 +72,11 @@ jobs:
           else
             echo "TOTAL_COUNT=0" >> $GITHUB_OUTPUT
             echo "COLLECTION_DATE=$(date)" >> $GITHUB_OUTPUT
+            echo "KEYWORD_RESULTS=결과 파일을 찾을 수 없습니다." >> $GITHUB_OUTPUT
             echo "BID_LIST=결과 파일을 찾을 수 없습니다." >> $GITHUB_OUTPUT
           fi
       
-      # 성공 시에도 이메일 알림 보내기
+      # 성공 시에도 이메일 알림 보내기 (다중 키워드 정보 포함)
       - name: Send Gmail notification on success
         if: success()
         uses: dawidd6/action-send-mail@v3
@@ -68,21 +85,24 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "[G2B 수집완료] ${{ steps.read_results.outputs.TOTAL_COUNT }}건 수집"
+          subject: "[G2B 수집완료] ${{ steps.read_results.outputs.TOTAL_COUNT }}건 수집 (다중키워드)"
           body: |
             🎉 G2B 입찰 데이터 수집이 완료되었습니다!
             
-            📊 수집 결과:
+            📊 전체 수집 결과:
             • 총 수집 공고: ${{ steps.read_results.outputs.TOTAL_COUNT }}건
             • 수집 완료 시간: ${{ steps.read_results.outputs.COLLECTION_DATE }}
             
-            📋 수집된 공고 목록:
+            🎯 키워드별 수집 현황:
+            ${{ steps.read_results.outputs.KEYWORD_RESULTS }}
+            
+            📋 수집된 공고 목록 (최신 20건):
             ${{ steps.read_results.outputs.BID_LIST }}
             
             🔗 대시보드에서 확인하기: https://g2b.onrender.com
             
             ---
-            G2B 입찰 데이터 자동 수집 시스템
+            G2B 입찰 데이터 자동 수집 시스템 (다중키워드 버전)
           to: hariqueen98@gmail.com
           from: G2B 수집시스템
           
@@ -95,12 +115,13 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "[G2B 오류] 데이터 수집 실패"
+          subject: "[G2B 오류] 다중키워드 데이터 수집 실패"
           body: |
-            ⚠️ G2B 데이터 수집 중 오류가 발생했습니다.
+            ⚠️ G2B 다중키워드 데이터 수집 중 오류가 발생했습니다.
             
             • 실행 시간: ${{ github.event.repository.updated_at }}
             • 워크플로우: ${{ github.workflow }}
+            • 대상 키워드: 콜센터, CX, AICC, IT, ISP, 고객경험, 컨설팅
             
             🔗 대시보드 확인: https://g2b.onrender.com
             
