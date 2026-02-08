@@ -11,7 +11,7 @@ from utils import get_output_path
 def fetch_bid_data(endpoint_path, search_config):
     # data.go.kr 서비스키는 "인코딩 키(%)" / "디코딩 키(원문)" 2종이 존재할 수 있어
     # 어떤 형태가 들어오든 unquote로 원문 형태로 맞춘 뒤 params로 한 번만 인코딩되도록 한다.
-    service_key = unquote(BID_API_KEY or "")
+    service_key = unquote(BID_API_KEY or "").strip()
     url = f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/{endpoint_path}"
     params = {
         "serviceKey": service_key,
@@ -51,6 +51,11 @@ def fetch_bid_data(endpoint_path, search_config):
 
         return payload.get("response", {}).get("body", {})
     except Exception as e:
+        # 인증/권한 문제는 "0건"으로 숨기면 장기간 방치되므로, 상위로 올려 워크플로우를 실패 처리한다.
+        if isinstance(e, RuntimeError) and str(e).startswith("G2B_AUTH_ERROR"):
+            print(f"[입찰공고 조회 오류] {e}")
+            raise
+
         print(f"[입찰공고 조회 오류] {e}")
         return None
 
