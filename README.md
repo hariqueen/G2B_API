@@ -524,6 +524,11 @@ G2B_API/
 | `EMAIL_USERNAME` | Gmail 발송 계정 | GitHub Secrets |
 | `EMAIL_PASSWORD` | Gmail 앱 비밀번호 | GitHub Secrets |
 
+### GitHub Actions 필수 Secrets 체크
+
+- `BID_API_KEY`: **반드시 등록 필요** (없으면 스케줄 수집이 0건으로 끝나거나, 최근 수정으로는 작업이 실패 처리됩니다)
+- `FIREBASE_CREDENTIALS`, `EMAIL_USERNAME`, `EMAIL_PASSWORD`: 기존과 동일
+
 **Firebase 인증 방식:**
 
 | 환경 | 인증 방식 |

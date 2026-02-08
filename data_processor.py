@@ -8,8 +8,9 @@ from utils import get_output_path
 
 # ✅ 입찰 공고 조회 함수
 def fetch_bid_data(endpoint_path, search_config):
-    url = f"http://apis.data.go.kr/1230000/ad/BidPublicInfoService/{endpoint_path}?serviceKey={BID_API_KEY}"
+    url = f"http://apis.data.go.kr/1230000/ad/BidPublicInfoService/{endpoint_path}"
     params = {
+        "serviceKey": BID_API_KEY,
         "pageNo": 1,
         "numOfRows": 100,
         "inqryDiv": 1,
@@ -19,9 +20,19 @@ def fetch_bid_data(endpoint_path, search_config):
         "bidNtceNm": search_config.keyword,
     }
     try:
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json().get("response", {}).get("body", {})
+        payload = response.json()
+
+        header = payload.get("response", {}).get("header", {}) or {}
+        result_code = header.get("resultCode")
+        result_msg = header.get("resultMsg")
+
+        # "00": 정상, "03": 데이터 없음(케이스가 종종 있음) → 빈 결과로 처리
+        if result_code and result_code not in ("00", "03"):
+            raise RuntimeError(f"G2B API 오류: resultCode={result_code}, resultMsg={result_msg}")
+
+        return payload.get("response", {}).get("body", {})
     except Exception as e:
         print(f"[입찰공고 조회 오류] {e}")
         return None

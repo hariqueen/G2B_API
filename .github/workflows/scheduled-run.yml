@@ -9,6 +9,9 @@ on:
 jobs:
   collect-data:
     runs-on: ubuntu-latest
+    env:
+      # 공공데이터포털 API 키 (필수)
+      BID_API_KEY: ${{ secrets.BID_API_KEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -25,7 +28,9 @@ jobs:
       
       - name: Create Firebase credentials file
         run: |
-          echo '${{ secrets.FIREBASE_CREDENTIALS }}' > g2b-db-6aae9-firebase-adminsdk-fbsvc-0e3b1ce560.json
+          cat > g2b-db-6aae9-firebase-adminsdk-fbsvc-0e3b1ce560.json <<'EOF'
+          ${{ secrets.FIREBASE_CREDENTIALS }}
+          EOF
       
       - name: Run data collection script
         run: python main.py
