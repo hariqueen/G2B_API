@@ -292,54 +292,59 @@ def main():
             print(f"❌ 키워드 '{keyword}' 처리 중 오류: {e}")
             keyword_results[keyword] = 0
 
+    # ── AX 키워드 Firestore 수집 ──────────────────────────
+    ax_result = {"keyword": "AX", "total_collected": 0, "upserted_records": 0, "bid_details": []}
+    try:
+        from ax_collector import collect_ax_data
+        ax_result = collect_ax_data()
+        keyword_results["AX (Firestore)"] = ax_result["upserted_records"]
+    except Exception as e:
+        print(f"❌ AX Firestore 수집 중 오류: {e}")
+        keyword_results["AX (Firestore)"] = 0
+
     # 🎉 최종 결과 출력
     print(f"\n{'='*50}")
     print("🎉 전체 키워드 수집 완료!")
     print(f"{'='*50}")
     
     total_count = len(all_collected_data)
-    print(f"📊 총 수집 데이터: {total_count}건")
+    print(f"📊 총 수집 데이터 (RTDB): {total_count}건")
+    print(f"📊 AX 수집 데이터 (Firestore): {ax_result['upserted_records']}건 업서트")
     
     print("\n📈 키워드별 수집 현황:")
     for keyword, count in keyword_results.items():
         print(f"  • {keyword}: {count}건")
 
+    import json
+
+    # 결과 정보를 파일로 저장 (GitHub Actions에서 읽기 위해)
+    result_info = {
+        "total_count": total_count,
+        "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "keyword_results": keyword_results,
+        "keywords": SEARCH_KEYWORDS,
+        "bid_details": [
+            {
+                "공고명": item["공고명"],
+                "채권자명": item["채권자명"]
+            } for item in all_collected_data
+        ],
+        "ax_result": {
+            "upserted_records": ax_result["upserted_records"],
+            "total_collected": ax_result["total_collected"],
+            "filtered_records": ax_result.get("filtered_records", 0),
+        },
+        "ax_bid_details": ax_result.get("bid_details", []),
+    }
+
+    with open('collection_result.json', 'w', encoding='utf-8') as f:
+        json.dump(result_info, f, ensure_ascii=False, indent=2)
+
     if all_collected_data:
-        # 결과 정보를 파일로 저장 (GitHub Actions에서 읽기 위해)
-        result_info = {
-            "total_count": total_count,
-            "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "keyword_results": keyword_results,
-            "keywords": SEARCH_KEYWORDS,
-            "bid_details": [
-                {
-                    "공고명": item["공고명"],
-                    "채권자명": item["채권자명"]
-                } for item in all_collected_data
-            ]
-        }
-        
-        import json
-        with open('collection_result.json', 'w', encoding='utf-8') as f:
-            json.dump(result_info, f, ensure_ascii=False, indent=2)
-        
         # 기존 데이터에 대한 user_inputs 생성
         create_missing_user_inputs()
     else:
-        # 수집된 데이터가 없을 때도 파일 생성
-        result_info = {
-            "total_count": 0,
-            "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "keyword_results": keyword_results,
-            "keywords": SEARCH_KEYWORDS,
-            "bid_details": []
-        }
-        
-        import json
-        with open('collection_result.json', 'w', encoding='utf-8') as f:
-            json.dump(result_info, f, ensure_ascii=False, indent=2)
-        
-        print("⚠️ 전체적으로 수집된 데이터가 없습니다.")
+        print("⚠️ RTDB 수집된 데이터가 없습니다. (AX는 별도 확인)")
 
     print_execution_time(start_time)
 

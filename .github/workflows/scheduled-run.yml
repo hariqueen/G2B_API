@@ -14,6 +14,8 @@ jobs:
       BID_API_KEY: ${{ secrets.BID_API_KEY }}
       # Firebase 서비스 계정 JSON (문자열). main.py가 환경변수 기반으로 파싱함.
       FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+      # Firestore (g2b-bid-finder) 서비스 계정 JSON. ax_collector.py가 파싱함.
+      FIREBASE_CREDENTIALS2: ${{ secrets.FIREBASE_CREDENTIALS2 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -74,11 +76,37 @@ jobs:
               echo "$BID_LIST"
               echo 'EOF'
             } >> $GITHUB_OUTPUT
+            
+            # AX Firestore 수집 결과
+            AX_UPSERTED="$(jq -r '.ax_result.upserted_records // 0' collection_result.json 2>/dev/null || echo 0)"
+            AX_TOTAL="$(jq -r '.ax_result.total_collected // 0' collection_result.json 2>/dev/null || echo 0)"
+            echo "AX_UPSERTED=$AX_UPSERTED" >> $GITHUB_OUTPUT
+            echo "AX_TOTAL=$AX_TOTAL" >> $GITHUB_OUTPUT
+            
+            AX_BID_LIST=""
+            if [ "$AX_UPSERTED" -gt 0 ] 2>/dev/null; then
+              AX_BID_LIST="$(jq -r '.ax_bid_details[:10][] | "• \(.["공고명"]) (\(.["채권자명"]))"' collection_result.json 2>/dev/null || true)"
+              if [ "$(jq -r '.ax_bid_details | length' collection_result.json 2>/dev/null || echo 0)" -gt 10 ] 2>/dev/null; then
+                AX_REMAINING=$(($(jq -r '.ax_bid_details | length' collection_result.json) - 10))
+                AX_BID_LIST="$AX_BID_LIST"$'\n'"... 외 ${AX_REMAINING}건 더"
+              fi
+            else
+              AX_BID_LIST="새로 수집된 AX 공고가 없습니다."
+            fi
+            
+            {
+              echo 'AX_BID_LIST<<EOF'
+              echo "$AX_BID_LIST"
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
           else
             echo "TOTAL_COUNT=0" >> $GITHUB_OUTPUT
             echo "COLLECTION_DATE=$(date)" >> $GITHUB_OUTPUT
             echo "KEYWORD_RESULTS=결과 파일을 찾을 수 없습니다." >> $GITHUB_OUTPUT
             echo "BID_LIST=결과 파일을 찾을 수 없습니다." >> $GITHUB_OUTPUT
+            echo "AX_UPSERTED=0" >> $GITHUB_OUTPUT
+            echo "AX_TOTAL=0" >> $GITHUB_OUTPUT
+            echo "AX_BID_LIST=결과 파일을 찾을 수 없습니다." >> $GITHUB_OUTPUT
           fi
       
       # 성공 시에도 이메일 알림 보내기 (다중 키워드 정보 포함)
@@ -90,11 +118,13 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "[G2B 수집완료] ${{ steps.read_results.outputs.TOTAL_COUNT }}건 수집 (다중키워드)"
+          subject: "[G2B 수집완료] RTDB ${{ steps.read_results.outputs.TOTAL_COUNT }}건 + AX ${{ steps.read_results.outputs.AX_UPSERTED }}건"
           body: |
             G2B 입찰 데이터 수집이 완료되었습니다!
             
-            전체 수집 결과:
+            ═══════════════════════════════════
+            📋 콜센터 운영 위탁 (RTDB) 수집 결과
+            ═══════════════════════════════════
             • 총 수집 공고: ${{ steps.read_results.outputs.TOTAL_COUNT }}건
             • 수집 완료 시간: ${{ steps.read_results.outputs.COLLECTION_DATE }}
             
@@ -104,10 +134,22 @@ jobs:
             수집된 공고 목록 (최신 20건):
             ${{ steps.read_results.outputs.BID_LIST }}
             
+            ═══════════════════════════════════
+            🔍 AX/BPR/ISP (Firestore) 수집 결과
+            ═══════════════════════════════════
+            • AX 키워드 적재: ${{ steps.read_results.outputs.AX_UPSERTED }}건
+            • AX API 수신: ${{ steps.read_results.outputs.AX_TOTAL }}건
+            
+            AX 수집된 공고 목록 (최신 10건):
+            ${{ steps.read_results.outputs.AX_BID_LIST }}
+            
+            ═══════════════════════════════════
+            🔗 대시보드 확인
+            ═══════════════════════════════════
             대시보드에서 확인하기: https://g2b.onrender.com
             
             ---
-            G2B 입찰 데이터 자동 수집 시스템 (다중키워드 버전)
+            G2B 입찰 데이터 자동 수집 시스템 (RTDB + Firestore 통합)
           to: hariqueen98@gmail.com
           from: G2B 수집시스템
           
