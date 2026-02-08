@@ -56,8 +56,9 @@ def _ensure_kst(dt: datetime) -> datetime:
 # ── Private Key 보정 ──────────────────────────────────
 def _fix_private_key(pem_str: str) -> str:
     """
-    ASN.1 DER 헤더에서 실제 키 길이를 읽어, 여분의 바이트를 잘라낸다.
-    일부 서비스 계정 JSON의 private_key에 중복 base64 데이터가 포함된 경우 대비.
+    private_key의 base64 데이터에서 중복 구간을 찾아 제거한다.
+    일부 서비스 계정 JSON의 private_key에 중복 base64 세그먼트가 포함되어
+    DER 파싱 시 'extra data' 또는 'Invalid private key' 에러가 발생하는 경우 대비.
     """
     if not pem_str or "-----BEGIN" not in pem_str:
         return pem_str
@@ -83,11 +84,30 @@ def _fix_private_key(pem_str: str) -> str:
     if len(der_data) <= expected_total:
         return pem_str  # 이미 정상 크기 → 원본 반환
 
-    # 여분의 바이트 잘라내기
-    print(f"[AX] private_key 보정: {len(der_data)}바이트 → {expected_total}바이트 (여분 {len(der_data) - expected_total}바이트 제거)")
-    der_data = der_data[:expected_total]
+    extra_bytes = len(der_data) - expected_total
+    print(f"[AX] private_key에 {extra_bytes}바이트 여분 데이터 감지. base64 중복 구간 검색...")
 
-    # 재인코딩 (64자 줄바꿈)
+    # 여분 바이트에 대응하는 base64 문자 수 (3바이트 → 4 base64문자)
+    segment_len = (extra_bytes * 4 + 2) // 3  # 18바이트 → 24문자
+
+    # base64 텍스트에서 연속 중복 구간 탐색 (ABAB → AB 로 축소)
+    for i in range(len(b64_body) - segment_len * 2 + 1):
+        segment = b64_body[i:i + segment_len]
+        # 바로 다음에 같은 세그먼트가 반복되는지 확인
+        if b64_body[i + segment_len:i + segment_len * 2] == segment:
+            fixed_b64 = b64_body[:i] + b64_body[i + segment_len:]
+            try:
+                fixed_der = base64.b64decode(fixed_b64)
+                if len(fixed_der) == expected_total:
+                    print(f"[AX] 중복 구간 발견 및 제거 완료: 위치 {i}, {segment_len}문자 ({extra_bytes}바이트)")
+                    b64_lines = [fixed_b64[j:j + 64] for j in range(0, len(fixed_b64), 64)]
+                    return header + "\n" + "\n".join(b64_lines) + "\n" + footer + "\n"
+            except Exception:
+                continue
+
+    # 중복 구간을 찾지 못한 경우: DER 끝에서 잘라냄 (fallback)
+    print(f"[AX] 중복 구간 미발견. DER 끝에서 {extra_bytes}바이트 잘라냄 (fallback).")
+    der_data = der_data[:expected_total]
     b64_fixed = base64.b64encode(der_data).decode()
     b64_lines = [b64_fixed[i:i + 64] for i in range(0, len(b64_fixed), 64)]
     return header + "\n" + "\n".join(b64_lines) + "\n" + footer + "\n"
