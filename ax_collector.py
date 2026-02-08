@@ -6,6 +6,7 @@ AX 키워드 나라장터 공고 수집 → Firestore (g2b-bid-finder) 적재 �
 - firebase_admin 앱: 'ax_firestore' (RTDB 기본 앱과 분리)
 """
 
+import base64
 import math
 import os
 import json
@@ -52,6 +53,46 @@ def _ensure_kst(dt: datetime) -> datetime:
         return dt
 
 
+# ── Private Key 보정 ──────────────────────────────────
+def _fix_private_key(pem_str: str) -> str:
+    """
+    ASN.1 DER 헤더에서 실제 키 길이를 읽어, 여분의 바이트를 잘라낸다.
+    일부 서비스 계정 JSON의 private_key에 중복 base64 데이터가 포함된 경우 대비.
+    """
+    if not pem_str or "-----BEGIN" not in pem_str:
+        return pem_str
+
+    lines = pem_str.strip().split("\n")
+    header = lines[0]   # -----BEGIN PRIVATE KEY-----
+    footer = lines[-1]  # -----END PRIVATE KEY-----
+    b64_body = "".join(lines[1:-1])
+
+    try:
+        der_data = base64.b64decode(b64_body)
+    except Exception:
+        return pem_str  # base64 디코딩 실패 → 원본 반환
+
+    # ASN.1 SEQUENCE 태그: 0x30, 길이 인코딩: 0x82 = 2바이트 길이
+    if len(der_data) < 4 or der_data[0] != 0x30 or der_data[1] != 0x82:
+        return pem_str  # 예상하지 못한 형식 → 원본 반환
+
+    # 2바이트 길이 파싱 (big-endian)
+    content_length = (der_data[2] << 8) | der_data[3]
+    expected_total = content_length + 4  # tag(1) + length_marker(1) + length_bytes(2)
+
+    if len(der_data) <= expected_total:
+        return pem_str  # 이미 정상 크기 → 원본 반환
+
+    # 여분의 바이트 잘라내기
+    print(f"[AX] private_key 보정: {len(der_data)}바이트 → {expected_total}바이트 (여분 {len(der_data) - expected_total}바이트 제거)")
+    der_data = der_data[:expected_total]
+
+    # 재인코딩 (64자 줄바꿈)
+    b64_fixed = base64.b64encode(der_data).decode()
+    b64_lines = [b64_fixed[i:i + 64] for i in range(0, len(b64_fixed), 64)]
+    return header + "\n" + "\n".join(b64_lines) + "\n" + footer + "\n"
+
+
 # ── Firebase 초기화 ───────────────────────────────────
 def init_firestore():
     """FIREBASE_CREDENTIALS2 환경변수 또는 로컬 JSON 파일로 Firestore 초기화."""
@@ -66,6 +107,9 @@ def init_firestore():
 
     if firebase_credentials2:
         cred_dict = json.loads(firebase_credentials2)
+        # private_key에 여분 바이트가 있으면 보정
+        if "private_key" in cred_dict:
+            cred_dict["private_key"] = _fix_private_key(cred_dict["private_key"])
         cred = credentials.Certificate(cred_dict)
     else:
         # 로컬 개발용 - 파일 경로로 시도
@@ -76,7 +120,12 @@ def init_firestore():
         cred = None
         for path in local_paths:
             if os.path.exists(path):
-                cred = credentials.Certificate(path)
+                # 파일에서 로드 후 보정
+                with open(path, 'r') as f:
+                    cred_dict = json.load(f)
+                if "private_key" in cred_dict:
+                    cred_dict["private_key"] = _fix_private_key(cred_dict["private_key"])
+                cred = credentials.Certificate(cred_dict)
                 break
         if cred is None:
             raise FileNotFoundError(
