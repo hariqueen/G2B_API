@@ -2,15 +2,19 @@ import os
 import time
 import pandas as pd
 import requests
+from urllib.parse import unquote
 from config import BID_API_KEY, BID_ENDPOINTS, SearchConfig
 from scsbid_client import get_scsbid_amount, get_openg_corp_info, get_bid_clsfc_no, get_nobid_reason
 from utils import get_output_path
 
 # ✅ 입찰 공고 조회 함수
 def fetch_bid_data(endpoint_path, search_config):
-    url = f"http://apis.data.go.kr/1230000/ad/BidPublicInfoService/{endpoint_path}"
+    # data.go.kr 서비스키는 "인코딩 키(%)" / "디코딩 키(원문)" 2종이 존재할 수 있어
+    # 어떤 형태가 들어오든 unquote로 원문 형태로 맞춘 뒤 params로 한 번만 인코딩되도록 한다.
+    service_key = unquote(BID_API_KEY or "")
+    url = f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/{endpoint_path}"
     params = {
-        "serviceKey": BID_API_KEY,
+        "serviceKey": service_key,
         "pageNo": 1,
         "numOfRows": 100,
         "inqryDiv": 1,
@@ -21,8 +25,21 @@ def fetch_bid_data(endpoint_path, search_config):
     }
     try:
         response = requests.get(url, params=params, timeout=30)
+
+        # 인증/권한 문제는 "0건"으로 삼키면 장기간 방치되므로 즉시 실패 처리
+        if response.status_code in (401, 403):
+            raise RuntimeError(
+                "G2B_AUTH_ERROR: "
+                f"{response.status_code} Unauthorized/Forbidden (serviceKey 확인 필요)"
+            )
+
         response.raise_for_status()
-        payload = response.json()
+
+        try:
+            payload = response.json()
+        except Exception:
+            snippet = (response.text or "")[:300].replace("\n", " ")
+            raise RuntimeError(f"G2B_API_ERROR: JSON 파싱 실패. 응답 일부: {snippet}")
 
         header = payload.get("response", {}).get("header", {}) or {}
         result_code = header.get("resultCode")

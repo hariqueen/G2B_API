@@ -244,10 +244,13 @@ def process_single_keyword(keyword):
                 })
 
         except Exception as e:
+            # 인증/권한 문제는 계속 0건으로 누적되므로 즉시 실패로 올린다.
+            if isinstance(e, RuntimeError) and str(e).startswith("G2B_AUTH_ERROR"):
+                raise
             print(f"[{api['desc']}] 키워드 '{keyword}' 데이터 수집 중 오류 발생: {e}")
             print(f"[{api['desc']}] 다음 API로 이동합니다.")
 
-    print(f"✅ 키워드 '{keyword}' 수집 완료: {len(keyword_data)}건")
+    print(f"키워드 '{keyword}' 수집 완료: {len(keyword_data)}건")
     return keyword_data
 
 def main():
@@ -283,6 +286,9 @@ def main():
                 # 키워드별로 Firebase에 즉시 업로드
                 upload_to_firebase(keyword_data)
         except Exception as e:
+            # 인증/권한 문제는 더 진행해도 의미 없으므로 즉시 실패 처리
+            if isinstance(e, RuntimeError) and str(e).startswith("G2B_AUTH_ERROR"):
+                raise
             print(f"❌ 키워드 '{keyword}' 처리 중 오류: {e}")
             keyword_results[keyword] = 0
 
