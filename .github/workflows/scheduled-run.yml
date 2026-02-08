@@ -87,19 +87,19 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "[G2B 수집완료] ${{ steps.read_results.outputs.TOTAL_COUNT }}건 수집 (다중키워드)"
           body: |
-            🎉 G2B 입찰 데이터 수집이 완료되었습니다!
+            G2B 입찰 데이터 수집이 완료되었습니다!
             
-            📊 전체 수집 결과:
+            전체 수집 결과:
             • 총 수집 공고: ${{ steps.read_results.outputs.TOTAL_COUNT }}건
             • 수집 완료 시간: ${{ steps.read_results.outputs.COLLECTION_DATE }}
             
-            🎯 키워드별 수집 현황:
+            키워드별 수집 현황:
             ${{ steps.read_results.outputs.KEYWORD_RESULTS }}
             
-            📋 수집된 공고 목록 (최신 20건):
+            수집된 공고 목록 (최신 20건):
             ${{ steps.read_results.outputs.BID_LIST }}
             
-            🔗 대시보드에서 확인하기: https://g2b.onrender.com
+            대시보드에서 확인하기: https://g2b.onrender.com
             
             ---
             G2B 입찰 데이터 자동 수집 시스템 (다중키워드 버전)
@@ -121,7 +121,6 @@ jobs:
             
             • 실행 시간: ${{ github.event.repository.updated_at }}
             • 워크플로우: ${{ github.workflow }}
-            • 대상 키워드: 콜센터, CX, AICC, IT, ISP, 고객경험, 컨설팅
             
             🔗 대시보드 확인: https://g2b.onrender.com
             

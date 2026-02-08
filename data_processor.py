@@ -49,7 +49,8 @@ def process_bid_items(items, api_desc, search_config):
                 "공고명": bid_name,
                 "채권자명": item.get("crdtrNm", ""),
                 "사업금액": total_price,
-                "입찰공고번호": bid_no
+                "입찰공고번호": bid_no,
+                "입찰공고URL": item.get("bidNtceDtlUrl", "")
             })
         except Exception as e:
             print(f"[항목 처리 오류] {e}")

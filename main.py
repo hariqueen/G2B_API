@@ -71,7 +71,7 @@ def upload_to_firebase(data_items):
             # 해당 연도와 월 경로 참조
             year_month_ref = bids_ref.child(year).child(month)
             
-            # 데이터 정리 - API에서 가져온 8개 필드만 저장
+            # 데이터 정리 - API에서 가져온 9개 필드 저장
             firebase_data = {
                 "입찰일시": item.get("입찰일시", ""),
                 "공고명": item.get("공고명", ""),
@@ -80,7 +80,8 @@ def upload_to_firebase(data_items):
                 "입찰공고번호": item.get("입찰공고번호", ""),
                 "낙찰금액": item.get("낙찰금액", 0),
                 "개찰업체정보": item.get("개찰업체정보", ""),
-                "유찰사유": item.get("유찰사유", "")
+                "유찰사유": item.get("유찰사유", ""),
+                "입찰공고URL": item.get("입찰공고URL", "")
             }
             
             # 중복 확인을 위해 해당 연도/월의 모든 데이터 가져오기
