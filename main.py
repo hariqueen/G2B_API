@@ -1,5 +1,5 @@
 import time
-from config import BID_ENDPOINTS, SearchConfig, DEFAULT_INPUT, SEARCH_KEYWORDS
+from config import BID_ENDPOINTS, SearchConfig, DEFAULT_INPUT, SEARCH_KEYWORDS, _now_kst
 from data_processor import fetch_bid_data, process_bid_items
 from scsbid_client import get_scsbid_amount, get_openg_corp_info, get_bid_clsfc_no, get_nobid_reason
 import firebase_admin
@@ -304,10 +304,10 @@ def main():
     try:
         from ax_collector import collect_ax_data
         ax_result = collect_ax_data()
-        keyword_results["AX (Firestore)"] = ax_result["upserted_records"]
+        keyword_results["AX"] = ax_result["upserted_records"]
     except Exception as e:
         print(f"❌ AX Firestore 수집 중 오류: {e}")
-        keyword_results["AX (Firestore)"] = 0
+        keyword_results["AX"] = 0
 
     # 🎉 최종 결과 출력
     print(f"\n{'='*50}")
@@ -325,12 +325,12 @@ def main():
     import json
 
     # AX 키워드별 공고 목록도 추가
-    keyword_bid_details["AX (Firestore)"] = ax_result.get("bid_details", [])
+    keyword_bid_details["AX"] = ax_result.get("bid_details", [])
 
     # 결과 정보를 파일로 저장 (GitHub Actions에서 읽기 위해)
     result_info = {
         "total_count": total_count,
-        "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "collection_date": _now_kst().strftime('%Y-%m-%d %H:%M:%S'),
         "keyword_results": keyword_results,
         "keywords": SEARCH_KEYWORDS,
         "keyword_bid_details": keyword_bid_details,
