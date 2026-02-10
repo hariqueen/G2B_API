@@ -51,14 +51,14 @@ jobs:
               KEYWORD_RESULTS="$(jq -r '.keyword_results | to_entries[] | "• \(.key): \(.value)건"' collection_result.json 2>/dev/null || true)"
             fi
             
-            # 공고명 목록을 문자열로 변환 (최대 20개로 제한)
+            # 키워드별 공고 목록 생성
             BID_LIST=""
             if [ "$(jq -r '.total_count' collection_result.json)" -gt 0 ]; then
-              # 한글 필드명은 .공고명 같은 dot-notation이 깨질 수 있어 bracket 표기 사용
-              BID_LIST="$(jq -r '.bid_details[:20][] | "• \(.["공고명"]) (\(.["채권자명"]))"' collection_result.json 2>/dev/null || true)"
-              TOTAL_BIDS="$(jq -r '.total_count' collection_result.json 2>/dev/null || echo 0)"
-              if [ "$TOTAL_BIDS" -gt 20 ]; then
-                BID_LIST="$BID_LIST"$'\n'"... 외 $(($TOTAL_BIDS - 20))건 더"
+              # keyword_bid_details에서 키워드별로 공고 목록 추출
+              if [ "$(jq -r '.keyword_bid_details // empty' collection_result.json 2>/dev/null)" != "" ]; then
+                BID_LIST="$(jq -r '.keyword_bid_details | to_entries[] | select(.value | length > 0) | "\n[\(.key)] \(.value | length)건:\(.value[] | "\n  • \(.["공고명"]) (\(.["채권자명"]))")"' collection_result.json 2>/dev/null || true)"
+              else
+                BID_LIST="$(jq -r '.bid_details[] | "• \(.["공고명"]) (\(.["채권자명"]))"' collection_result.json 2>/dev/null || true)"
               fi
             else
               BID_LIST="수집된 공고가 없습니다."
@@ -85,11 +85,7 @@ jobs:
             
             AX_BID_LIST=""
             if [ "$AX_UPSERTED" -gt 0 ] 2>/dev/null; then
-              AX_BID_LIST="$(jq -r '.ax_bid_details[:10][] | "• \(.["공고명"]) (\(.["채권자명"]))"' collection_result.json 2>/dev/null || true)"
-              if [ "$(jq -r '.ax_bid_details | length' collection_result.json 2>/dev/null || echo 0)" -gt 10 ] 2>/dev/null; then
-                AX_REMAINING=$(($(jq -r '.ax_bid_details | length' collection_result.json) - 10))
-                AX_BID_LIST="$AX_BID_LIST"$'\n'"... 외 ${AX_REMAINING}건 더"
-              fi
+              AX_BID_LIST="$(jq -r '.ax_bid_details[] | "• \(.["공고명"]) (\(.["채권자명"]))"' collection_result.json 2>/dev/null || true)"
             else
               AX_BID_LIST="새로 수집된 AX 공고가 없습니다."
             fi
@@ -131,7 +127,7 @@ jobs:
             키워드별 수집 현황:
             ${{ steps.read_results.outputs.KEYWORD_RESULTS }}
             
-            수집된 공고 목록 (최신 20건):
+            키워드별 수집된 공고 목록:
             ${{ steps.read_results.outputs.BID_LIST }}
             
             ═══════════════════════════════════
@@ -140,7 +136,7 @@ jobs:
             • AX 키워드 적재: ${{ steps.read_results.outputs.AX_UPSERTED }}건
             • AX API 수신: ${{ steps.read_results.outputs.AX_TOTAL }}건
             
-            AX 수집된 공고 목록 (최신 10건):
+            AX 수집된 공고 목록:
             ${{ steps.read_results.outputs.AX_BID_LIST }}
             
             ═══════════════════════════════════

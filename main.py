@@ -259,6 +259,7 @@ def main():
     # 전체 수집 데이터 저장
     all_collected_data = []
     keyword_results = {}
+    keyword_bid_details = {}  # 키워드별 공고 목록 (팝업용)
 
     print("\n📦 다중 키워드 입찰 + 개찰 통합 수집을 시작합니다...")
     print(f"검색 조건: 기간 {DEFAULT_INPUT['start_date']} ~ {DEFAULT_INPUT['end_date']}")
@@ -276,6 +277,12 @@ def main():
             
             # 키워드별 결과 저장
             keyword_results[keyword] = len(keyword_data)
+            
+            # 키워드별 공고 목록 저장
+            keyword_bid_details[keyword] = [
+                {"공고명": item["공고명"], "채권자명": item["채권자명"]}
+                for item in keyword_data
+            ]
             
             # 전체 데이터에 추가
             all_collected_data.extend(keyword_data)
@@ -317,12 +324,16 @@ def main():
 
     import json
 
+    # AX 키워드별 공고 목록도 추가
+    keyword_bid_details["AX (Firestore)"] = ax_result.get("bid_details", [])
+
     # 결과 정보를 파일로 저장 (GitHub Actions에서 읽기 위해)
     result_info = {
         "total_count": total_count,
         "collection_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         "keyword_results": keyword_results,
         "keywords": SEARCH_KEYWORDS,
+        "keyword_bid_details": keyword_bid_details,
         "bid_details": [
             {
                 "공고명": item["공고명"],
