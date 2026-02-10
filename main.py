@@ -337,8 +337,18 @@ def main():
         "ax_bid_details": ax_result.get("bid_details", []),
     }
 
+    # G2B_API 폴더에 저장 (GitHub Actions 이메일 알림용)
     with open('collection_result.json', 'w', encoding='utf-8') as f:
         json.dump(result_info, f, ensure_ascii=False, indent=2)
+    
+    # Firebase RTDB에 수집 결과 저장 (프론트엔드에서 실시간 조회)
+    try:
+        initialize_firebase()
+        collection_ref = db.reference('/collection_results/latest')
+        collection_ref.set(result_info)
+        print("✅ 수집 결과를 Firebase RTDB /collection_results/latest 에 저장했습니다.")
+    except Exception as e:
+        print(f"⚠️ Firebase RTDB에 수집 결과 저장 실패 (무시하고 계속): {e}")
 
     if all_collected_data:
         # 기존 데이터에 대한 user_inputs 생성
