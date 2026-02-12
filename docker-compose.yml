@@ -1,0 +1,7 @@
+services:
+  g2b-redesign:
+    build: .
+    container_name: g2b-redesign-app
+    ports:
+      - "3004:3003"
+    restart: always

@@ -1,45 +1,45 @@
-# 환경 변수 파일
-.env
+# Dependencies
+node_modules/
+package-lock.json
 
-# 생성된 파일들
-*.csv
-*.gsheet
-*.xlsx
-*.xls
-
-# Python 관련 파일
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
+# Build output
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
+build/
 
-# 가상환경
-venv/
-ENV/
-env/
+# Environment variables (실제 키 포함)
+.env
+.env.local
+.env.production
+.env.development
 
-# IDE 관련 파일
-.idea/
+# Firebase / GCP 서비스 계정 키 (절대 업로드 금지!)
+server/keys/
+*.json.bak
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+*-adminsdk*.json
+
+# Test / Debug files
+test_firestore.py
+error.log
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE / Editor
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
 
-# Firebase 서비스 계정 키
-*-firebase-adminsdk-*.json
-*-rtdb-export.json
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker (optional)
+# docker-compose.yml
+# Dockerfile
+# .dockerignore
