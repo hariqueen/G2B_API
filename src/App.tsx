@@ -13,7 +13,8 @@ import {
     ArrowRight,
     Globe,
     Bell,
-    Award
+    Award,
+    Settings
 } from 'lucide-react'
 
 // 원화(₩) 커스텀 아이콘 컴포넌트
@@ -42,12 +43,13 @@ import { Bid } from './types'
 import { updateServiceDuration } from './api/bidActions'
 import BidFinder from './components/BidFinder'
 import CollectionStatusModal, { shouldShowCollectionModal } from './components/CollectionStatusModal'
+import SettingsPanel from './components/SettingsPanel'
 
 function App() {
     const { bids, loading } = useBids()
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
     const [monthPage, setMonthPage] = useState(0)
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'ax-bpr-isp'>('dashboard')
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'ax-bpr-isp' | 'settings'>('dashboard')
     const [selectedBidId, setSelectedBidId] = useState<string | null>(null)
     const [showCollectionModal, setShowCollectionModal] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
@@ -204,6 +206,16 @@ function App() {
                                     <span className="text-sm">AX / BPR / ISP</span>
                                 </button>
                             </div>
+
+                            <div className="pt-2">
+                                <button
+                                    onClick={() => setActiveTab('settings')}
+                                    className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-bold transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/25' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}
+                                >
+                                    <Settings size={20} />
+                                    <span className="text-sm">설정</span>
+                                </button>
+                            </div>
                         </nav>
                     </div>
                 </aside>
@@ -214,7 +226,8 @@ function App() {
                         <div className="flex items-center gap-4">
                             <h2 className="text-xl font-bold text-slate-800">
                                 {activeTab === 'dashboard' ? '입찰 공고 종합 현황' :
-                                    activeTab === 'list' ? '전체 입찰 공고 목록' : 'G2B 실시간 공고 모니터링'}
+                                    activeTab === 'list' ? '전체 입찰 공고 목록' :
+                                        activeTab === 'settings' ? '설정' : 'G2B 실시간 공고 모니터링'}
                             </h2>
                             {activeTab === 'dashboard' && stats.predictionCount > 0 && (
                                 <div className="px-3 py-1 bg-rose-50 text-rose-500 rounded-full text-[10px] font-bold border border-rose-100">
@@ -251,6 +264,10 @@ function App() {
                     {activeTab === 'ax-bpr-isp' ? (
                         <div className="flex-1 overflow-hidden h-full">
                             <BidFinder selectedYear={selectedYear} />
+                        </div>
+                    ) : activeTab === 'settings' ? (
+                        <div className="flex-1 overflow-y-auto p-8 bg-[#F8FAFC]">
+                            <SettingsPanel />
                         </div>
                     ) : (
                         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-[#F8FAFC]">
