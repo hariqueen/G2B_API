@@ -253,6 +253,28 @@ def process_single_keyword(keyword):
     print(f"키워드 '{keyword}' 수집 완료: {len(keyword_data)}건")
     return keyword_data
 
+def get_search_keywords():
+    """RTDB /search_keywords 에서 키워드 목록을 읽어온다(대시보드 '설정' 탭에서 관리).
+    없거나 실패하면 config.py 의 기본 SEARCH_KEYWORDS 를 사용한다."""
+    try:
+        initialize_firebase()
+        data = db.reference('/search_keywords').get()
+        if data:
+            if isinstance(data, dict):
+                # {index: keyword} 또는 {pushId: keyword} 형태 대응
+                kws = [v for _, v in sorted(data.items(), key=lambda x: str(x[0])) if isinstance(v, str)]
+            else:
+                kws = [v for v in data if isinstance(v, str)]
+            kws = [k.strip() for k in kws if k and k.strip()]
+            if kws:
+                print(f"🔑 RTDB에서 키워드 {len(kws)}개 로드: {', '.join(kws)}")
+                return kws
+    except Exception as e:
+        print(f"⚠️ RTDB 키워드 로드 실패, 기본값 사용: {e}")
+    print(f"🔑 기본 키워드 사용 ({len(SEARCH_KEYWORDS)}개)")
+    return list(SEARCH_KEYWORDS)
+
+
 def main():
     start_time = time.time()
 
@@ -261,15 +283,18 @@ def main():
     keyword_results = {}
     keyword_bid_details = {}  # 키워드별 공고 목록 (팝업용)
 
+    # 검색 키워드: RTDB(대시보드 설정 탭)에서 우선 로드, 없으면 config 기본값
+    keywords = get_search_keywords()
+
     print("\n📦 다중 키워드 입찰 + 개찰 통합 수집을 시작합니다...")
     print(f"검색 조건: 기간 {DEFAULT_INPUT['start_date']} ~ {DEFAULT_INPUT['end_date']}")
-    print(f"검색 키워드: {', '.join(SEARCH_KEYWORDS)}")
+    print(f"검색 키워드: {', '.join(keywords)}")
     print("※ 용역 카테고리만 수집합니다.")
 
     # 🔄 각 키워드별로 순차 처리
-    for i, keyword in enumerate(SEARCH_KEYWORDS, 1):
+    for i, keyword in enumerate(keywords, 1):
         print(f"\n{'='*50}")
-        print(f"🎯 [{i}/{len(SEARCH_KEYWORDS)}] 키워드: '{keyword}' 처리 중...")
+        print(f"🎯 [{i}/{len(keywords)}] 키워드: '{keyword}' 처리 중...")
         print(f"{'='*50}")
         
         try:
@@ -332,7 +357,7 @@ def main():
         "total_count": total_count,
         "collection_date": _now_kst().strftime('%Y-%m-%d %H:%M:%S'),
         "keyword_results": keyword_results,
-        "keywords": SEARCH_KEYWORDS,
+        "keywords": keywords,
         "keyword_bid_details": keyword_bid_details,
         "bid_details": [
             {
