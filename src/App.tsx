@@ -14,7 +14,8 @@ import {
     Globe,
     Bell,
     Award,
-    Settings
+    Settings,
+    Trash2
 } from 'lucide-react'
 
 // 원화(₩) 커스텀 아이콘 컴포넌트
@@ -40,7 +41,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBids } from './hooks/useBids'
 import { Bid } from './types'
-import { updateServiceDuration } from './api/bidActions'
+import { updateServiceDuration, deleteBid } from './api/bidActions'
 import BidFinder from './components/BidFinder'
 import CollectionStatusModal, { shouldShowCollectionModal } from './components/CollectionStatusModal'
 import SettingsPanel from './components/SettingsPanel'
@@ -149,6 +150,18 @@ function App() {
             const baseId = editingBid.bid_id.split('_pred_')[0]
             await updateServiceDuration(baseId, editDuration)
             setEditingBid(null)
+        }
+    }
+
+    const handleDelete = async (bid: Bid) => {
+        const ok = window.confirm(
+            `[${bid.공고명}]\n\n⚠️ 한 번 삭제하면 이 공고는 목록에서 영구히 제외되며, 다시는 불러올 수 없습니다.\n(예측 공고도 함께 사라집니다.)\n\n그래도 삭제하시겠습니까?`
+        )
+        if (!ok) return
+        try {
+            await deleteBid(bid.bid_id, bid.공고명)
+        } catch (e) {
+            window.alert(`삭제 실패: ${(e as Error).message}`)
         }
     }
 
@@ -645,12 +658,22 @@ function App() {
                                                                 </td>
                                                                 <td className="px-6 py-5 text-center">
                                                                     {!bid.is_prediction && (
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); handleEdit(bid); }}
-                                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-all border border-slate-100"
-                                                                        >
-                                                                            <Edit2 size={12} />
-                                                                        </button>
+                                                                        <div className="inline-flex items-center gap-1.5">
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleEdit(bid); }}
+                                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-all border border-slate-100"
+                                                                                title="용역기간 수정"
+                                                                            >
+                                                                                <Edit2 size={12} />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleDelete(bid); }}
+                                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-bold rounded-xl hover:bg-rose-600 hover:text-white transition-all border border-slate-100"
+                                                                                title="공고 삭제(목록에서 영구 제외)"
+                                                                            >
+                                                                                <Trash2 size={12} />
+                                                                            </button>
+                                                                        </div>
                                                                     )}
                                                                 </td>
                                                             </tr>

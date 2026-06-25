@@ -10,8 +10,10 @@ export const useBids = () => {
     useEffect(() => {
         const bidsRef = ref(db, '/bids');
         const userInputsRef = ref(db, '/user_inputs');
+        const hiddenRef = ref(db, '/hidden_bids');
         let bidsData: any = {};
         let userInputsData: any = {};
+        let hiddenData: any = {};
         let bidsLoaded = false;
 
         const buildBids = () => {
@@ -62,9 +64,12 @@ export const useBids = () => {
                     });
                 });
 
+                // 제외(숨김) 처리된 공고 필터링 (/hidden_bids) - 원본과 예측 모두 숨김
+                const visibleRows = rows.filter(r => !hiddenData[r.bid_id]);
+
                 // 예측 로직: 용역기간 기반으로 차기 입찰 예측
                 const predictions: Bid[] = [];
-                rows.forEach(bid => {
+                visibleRows.forEach(bid => {
                     if (bid['용역기간(개월)'] > 0 && !bid.is_prediction) {
                         const serviceMonths = bid['용역기간(개월)'];
                         let currentDate = new Date(bid.예상_입찰일);
@@ -96,7 +101,7 @@ export const useBids = () => {
                     }
                 });
 
-                setBids([...rows, ...predictions]);
+                setBids([...visibleRows, ...predictions]);
                 setLoading(false);
             } catch (err) {
                 console.error('Error building bids:', err);
@@ -122,9 +127,20 @@ export const useBids = () => {
             buildBids();
         });
 
+        // /hidden_bids 실시간 리스너 (목록에서 제외한 공고)
+        const unsubHidden = onValue(hiddenRef, (snapshot) => {
+            hiddenData = snapshot.val() || {};
+            buildBids();
+        }, () => {
+            // 규칙 미설정 등으로 읽기 실패 시 빈 값으로 처리 (전체 표시)
+            hiddenData = {};
+            buildBids();
+        });
+
         return () => {
             unsubBids();
             unsubInputs();
+            unsubHidden();
         };
     }, []);
 
