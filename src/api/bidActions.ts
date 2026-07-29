@@ -7,11 +7,6 @@ export const deleteBid = async (bidId: string, 공고명 = '') => {
     await set(ref(db, `/hidden_bids/${bidId}`), { hidden: true, 공고명, hiddenAt: now });
 };
 
-// 제외 해제(복원)
-export const restoreBid = async (bidId: string) => {
-    await set(ref(db, `/hidden_bids/${bidId}`), null);
-};
-
 export const updateServiceDuration = async (bidId: string, duration: number) => {
     const userRef = ref(db, `/user_inputs/${bidId}`);
 

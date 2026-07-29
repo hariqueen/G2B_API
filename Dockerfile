@@ -1,14 +1,30 @@
-FROM node:20-slim
+# ---------- build stage ----------
+FROM node:20-slim AS build
 
 WORKDIR /app
 
 COPY package.json .
 RUN npm install
 
+# VITE_ 변수는 빌드 시점에 번들로 구워진다 (런타임 주입 불가)
+ARG VITE_RTDB_DATABASE_URL
+ENV VITE_RTDB_DATABASE_URL=$VITE_RTDB_DATABASE_URL
+
 COPY . .
+RUN npm run build
 
-# Vite: 3003, API server: 3001
-EXPOSE 3003
+# ---------- runtime stage ----------
+FROM node:20-slim AS runtime
 
-# 백엔드 API 서버 + Vite 동시 실행
-CMD ["sh", "-c", "node server/index.js & npx vite --host 0.0.0.0 --port 3003"]
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package.json .
+RUN npm install --omit=dev && npm cache clean --force
+
+COPY server ./server
+COPY --from=build /app/dist ./dist
+
+EXPOSE 3001
+
+CMD ["node", "server/index.js"]

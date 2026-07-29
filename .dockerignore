@@ -4,3 +4,9 @@ dist
 .vscode
 .idea
 *.log
+
+# 비밀정보는 이미지에 굽지 않는다 (compose의 env_file / volume 으로 주입)
+.env
+.env.*
+!.env.example
+firestore-key.json

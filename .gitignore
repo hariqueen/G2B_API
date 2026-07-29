@@ -16,6 +16,7 @@ build/
 server/keys/
 *.json.bak
 serviceAccountKey.json
+firestore-key.json
 *-firebase-adminsdk-*.json
 *-adminsdk*.json
 

@@ -1,7 +1,23 @@
 services:
   g2b-redesign:
-    build: .
+    build:
+      context: .
+      args:
+        # VITE_ 변수는 런타임이 아닌 빌드 시점에 필요
+        VITE_RTDB_DATABASE_URL: ${VITE_RTDB_DATABASE_URL}
     container_name: g2b-redesign-app
+    # 외부 포트 3004 고정 (공유된 URL 유지) -> 컨테이너 내부는 express 3001
     ports:
-      - "3004:3003"
-    restart: always
+      - "3004:3001"
+    env_file:
+      - .env
+    volumes:
+      # 서비스 계정 키는 이미지에 굽지 않고 런타임에 읽기전용 마운트
+      - ./firestore-key.json:/app/firestore-key.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

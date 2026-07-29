@@ -21,3 +21,6 @@ if (!getApps().length) {
 
 export const db = getDatabase(rtdbApp);
 export { ref, onValue, set, get };
+
+// Firestore(g2b-bid-finder) 데이터는 클라이언트가 직접 붙지 않고
+// 서버의 /api/firestore/bids (서비스 계정 인증)를 통해 가져온다.
