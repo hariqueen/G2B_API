@@ -172,7 +172,7 @@ jobs:
             ═══════════════════════════════════
             🔗 대시보드 확인
             ═══════════════════════════════════
-            대시보드에서 확인하기: https://g2b.onrender.com
+            대시보드에서 확인하기: http://10.13.2.68:3004
             
             ---
             G2B 입찰 데이터 자동 수집 시스템 (RTDB + Firestore 통합)
@@ -195,7 +195,7 @@ jobs:
             • 실행 시간: ${{ github.event.repository.updated_at }}
             • 워크플로우: ${{ github.workflow }}
             
-            🔗 대시보드 확인: https://g2b.onrender.com
+            🔗 대시보드 확인: http://10.13.2.68:3004
             
             GitHub Actions 로그를 확인하여 문제를 해결해 주세요.
             

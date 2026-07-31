@@ -7,7 +7,7 @@
 - **Firebase 프로젝트**: `g2b-db-6aae9`
 - **DB 리전**: Asia Southeast 1 (싱가포르)
 - **DB URL**: `https://g2b-db-6aae9-default-rtdb.asia-southeast1.firebasedatabase.app/`
-- **대시보드**: https://g2b.onrender.com
+- **대시보드**: http://10.13.2.68:3004
 
 ---
 
