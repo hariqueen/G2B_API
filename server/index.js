@@ -25,6 +25,74 @@ try {
     console.error('[Server] BidFinder API will return empty results.');
 }
 
+/**
+ * 컬렉션 전체 조회 결과를 메모리에 캐시한다.
+ *
+ * 각 라우트가 컬렉션을 통째로 읽기 때문에 캐시가 없으면 요청 1건당
+ * 문서 수만큼 read 가 발생한다(사전규격+발주계획 1,387건). 프론트에서
+ * 두 컴포넌트가 각각 호출하면 페이지 1회 열 때 2,700 read 를 넘겨
+ * Firestore 무료 한도(일 50,000 read)를 금방 소진한다. 실제로 소진시킨 적 있다.
+ *
+ * 데이터는 수집 배치가 하루 1회 갱신하므로 TTL 10분이면 충분히 신선하다.
+ */
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const cache = new Map();   // name -> { at, rows }
+const inflight = new Map(); // name -> Promise (동시 요청 중복 읽기 방지)
+
+// 조회 실패 후 재시도까지 기다리는 시간.
+// 할당량 초과 상태에서 매 요청마다 재시도하면 복구를 더 늦춘다.
+const ERROR_BACKOFF_MS = 60 * 1000;
+const lastError = new Map(); // name -> { at, message }
+
+async function readCollection(name, decorate = (d) => d) {
+    const hit = cache.get(name);
+    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.rows;
+    if (inflight.has(name)) return inflight.get(name);
+
+    // 최근에 실패했으면 잠시 재시도하지 않는다. 캐시가 있으면 낡았어도 그걸 준다.
+    const err = lastError.get(name);
+    if (err && Date.now() - err.at < ERROR_BACKOFF_MS) {
+        if (hit) return hit.rows;
+        throw new Error(err.message);
+    }
+
+    const task = (async () => {
+        const snap = await firestore.collection(name).get();
+        const rows = [];
+        snap.forEach(doc => rows.push(decorate({ id: doc.id, ...doc.data() })));
+        cache.set(name, { at: Date.now(), rows });
+        lastError.delete(name);
+        console.log(`[Server] ${name}: ${rows.length}건 조회 후 캐시 (TTL ${CACHE_TTL_MS / 60000}분)`);
+        return rows;
+    })().catch(e => {
+        lastError.set(name, { at: Date.now(), message: e.message });
+        // 낡은 캐시라도 있으면 화면을 죽이지 않는다 (할당량 초과 등 일시 장애 대비)
+        if (hit) {
+            console.warn(`[Server] ${name} 조회 실패, 캐시로 응답: ${e.message}`);
+            return hit.rows;
+        }
+        throw e;
+    }).finally(() => inflight.delete(name));
+
+    inflight.set(name, task);
+    return task;
+}
+
+// 캐시 상태 확인 / 강제 갱신
+app.get('/api/cache', (req, res) => {
+    const now = Date.now();
+    res.json({
+        ttlMinutes: CACHE_TTL_MS / 60000,
+        entries: [...cache.entries()].map(([name, v]) => ({
+            name, rows: v.rows.length, ageSeconds: Math.round((now - v.at) / 1000)
+        }))
+    });
+});
+app.post('/api/cache/clear', (req, res) => {
+    cache.clear();
+    res.json({ cleared: true });
+});
+
 // API: Firestore bid_pblanc_list 전체 조회
 app.get('/api/firestore/bids', async (req, res) => {
     if (!firestore) {
@@ -32,17 +100,11 @@ app.get('/api/firestore/bids', async (req, res) => {
     }
 
     try {
-        const snapshot = await firestore.collection('bid_pblanc_list')
-            .orderBy('bidNtceDt', 'desc')
-            .get();
-
-        const bids = [];
-        snapshot.forEach(doc => {
-            bids.push({ id: doc.id, ...doc.data() });
-        });
-
-        console.log(`[Server] Fetched ${bids.length} bids from Firestore`);
-        res.json(bids);
+        const bids = await readCollection('bid_pblanc_list');
+        // 정렬은 캐시된 배열에서 처리한다 (Firestore orderBy 를 매번 태우지 않는다)
+        const sorted = [...bids].sort((a, b) =>
+            String(b.bidNtceDt || '').localeCompare(String(a.bidNtceDt || '')));
+        res.json(sorted);
     } catch (error) {
         console.error('[Server] Error fetching Firestore bids:', error.message);
         res.status(500).json({ error: error.message });
@@ -58,20 +120,15 @@ app.get('/api/firestore/pre-specs', async (req, res) => {
     }
 
     try {
-        const [specSnap, planSnap] = await Promise.all([
-            firestore.collection('pre_spec_list').get(),
-            firestore.collection('order_plan_list').get()
+        const [specs, plans] = await Promise.all([
+            readCollection('pre_spec_list', d => ({ ...d, _source: 'pre_spec' })),
+            readCollection('order_plan_list', d => ({ ...d, _source: 'order_plan' }))
         ]);
 
-        const rows = [];
-        specSnap.forEach(doc => rows.push({ id: doc.id, _source: 'pre_spec', ...doc.data() }));
-        planSnap.forEach(doc => rows.push({ id: doc.id, _source: 'order_plan', ...doc.data() }));
-
         // 사전규격은 접수일시(rcptDt), 발주계획은 게시일시(nticeDt) 기준 최신순
-        rows.sort((a, b) => String(b.rcptDt || b.nticeDt || '')
-            .localeCompare(String(a.rcptDt || a.nticeDt || '')));
+        const rows = [...specs, ...plans].sort((a, b) =>
+            String(b.rcptDt || b.nticeDt || '').localeCompare(String(a.rcptDt || a.nticeDt || '')));
 
-        console.log(`[Server] Fetched ${specSnap.size} pre-specs + ${planSnap.size} order-plans`);
         res.json(rows);
     } catch (error) {
         console.error('[Server] Error fetching pre-specs:', error.message);

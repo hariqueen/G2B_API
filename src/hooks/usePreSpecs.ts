@@ -78,26 +78,46 @@ const toItem = (doc: any): PreSpecItem => {
     };
 };
 
+/**
+ * 응답을 모듈 레벨에서 공유한다.
+ *
+ * 이 훅을 App(지표 카드)과 PreSpecFinder(목록)가 각각 호출하기 때문에
+ * 캐시가 없으면 페이지 1회 열 때 같은 엔드포인트를 2번 때린다.
+ * 서버가 컬렉션 전체를 읽는 구조라 그대로 Firestore read 로 이어진다.
+ */
+let sharedPromise: Promise<PreSpecItem[]> | null = null;
+
+const loadPreSpecs = () => {
+    if (!sharedPromise) {
+        sharedPromise = fetch('/api/firestore/pre-specs')
+            .then(res => {
+                if (!res.ok) throw new Error(`API error: ${res.status}`);
+                return res.json();
+            })
+            .then((data: any[]) => data.map(toItem))
+            .catch(err => {
+                sharedPromise = null;   // 실패는 캐시하지 않는다
+                throw err;
+            });
+    }
+    return sharedPromise;
+};
+
 export const usePreSpecs = (domain?: PreSpecDomain) => {
     const [all, setAll] = useState<PreSpecItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
-        const run = async () => {
-            try {
-                const res = await fetch('/api/firestore/pre-specs');
-                if (!res.ok) throw new Error(`API error: ${res.status}`);
-                const data = await res.json();
-                setAll(data.map(toItem));
-            } catch (err) {
+        let alive = true;
+        loadPreSpecs()
+            .then(rows => { if (alive) setAll(rows); })
+            .catch(err => {
                 console.error('Error fetching pre-specs:', err);
-                setError(err as Error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        run();
+                if (alive) setError(err as Error);
+            })
+            .finally(() => { if (alive) setLoading(false); });
+        return () => { alive = false; };
     }, []);
 
     // 도메인이 지정되면 해당 도메인 건만 본다.

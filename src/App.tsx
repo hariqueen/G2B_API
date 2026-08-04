@@ -746,11 +746,10 @@ function App() {
 
                                     // 페이지네이션. 삭제·필터로 건수가 줄어 현재 페이지가 범위를 벗어나면
                                     // 빈 화면이 되므로 마지막 페이지로 당겨서 쓴다.
-                                    const PAGE_SIZE = 10
-                                    const totalPages = Math.max(1, Math.ceil(filteredBids.length / PAGE_SIZE))
+                                    const totalPages = Math.max(1, Math.ceil(filteredBids.length / listPageSize))
                                     const page = Math.min(Math.max(1, listPage), totalPages)
-                                    const startIdx = (page - 1) * PAGE_SIZE
-                                    const pageBids = filteredBids.slice(startIdx, startIdx + PAGE_SIZE)
+                                    const startIdx = (page - 1) * listPageSize
+                                    const pageBids = filteredBids.slice(startIdx, startIdx + listPageSize)
 
                                     // 페이지 번호는 현재 페이지 기준 최대 5개 창으로 보여준다.
                                     const winStart = Math.max(1, Math.min(page - 2, totalPages - 4))
@@ -799,6 +798,17 @@ function App() {
                                                             className="bg-transparent border-none outline-none text-xs w-full"
                                                         />
                                                     </div>
+
+                                                    <select
+                                                        value={listPageSize}
+                                                        onChange={(e) => setListPageSize(Number(e.target.value))}
+                                                        className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 outline-none cursor-pointer hover:text-slate-700"
+                                                        title="페이지당 표시 건수"
+                                                    >
+                                                        {[10, 30, 50, 100].map(n => (
+                                                            <option key={n} value={n}>{n}개씩</option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             </div>
                                             <div className="overflow-x-auto">
