@@ -33,9 +33,16 @@ try {
  * 두 컴포넌트가 각각 호출하면 페이지 1회 열 때 2,700 read 를 넘겨
  * Firestore 무료 한도(일 50,000 read)를 금방 소진한다. 실제로 소진시킨 적 있다.
  *
- * 데이터는 수집 배치가 하루 1회 갱신하므로 TTL 10분이면 충분히 신선하다.
+ * 데이터는 수집 배치(GitHub Actions)가 하루 1회 갱신하므로 TTL 을 길게 잡는다.
+ *
+ * TTL 별 하루 최대 read (문서 1,674건 기준, 무료 한도 50,000):
+ *   10분 → 241,056  한도 5배 초과
+ *   60분 →  40,176  빠듯함
+ *    6시간 →  6,696  여유
+ * 수집이 하루 1회라 6시간이면 신선도도 충분하다.
+ * 즉시 반영이 필요하면 POST /api/cache/clear 로 비운다.
  */
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MINUTES || 360) * 60 * 1000;
 const cache = new Map();   // name -> { at, rows }
 const inflight = new Map(); // name -> Promise (동시 요청 중복 읽기 방지)
 
