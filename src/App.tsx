@@ -51,8 +51,20 @@ import SettingsPanel from './components/SettingsPanel'
 function App() {
     const { bids, loading } = useBids()
     // 사이드바 '사전규격' 뱃지용. 의견등록이 열려 있는 건은 상시 3~4건 수준이다.
-    const { openOpinions } = usePreSpecs()
+    const { items: preSpecItems, openOpinions } = usePreSpecs()
     const openOpinionCount = openOpinions.length
+
+    // 입찰공고번호 → 사전규격 역인덱스. 공고 상세에서 "사전규격 있었음"을 띄운다.
+    // RTDB의 bid_id 가 순수 공고번호라 bidNtceNos 와 그대로 매칭된다.
+    const preSpecByBidNo = useMemo(() => {
+        const map = new Map<string, typeof preSpecItems[number]>()
+        preSpecItems
+            .filter(i => i.source === 'pre_spec')
+            .forEach(i => i.bidNtceNos.forEach(no => {
+                if (!map.has(no)) map.set(no, i)
+            }))
+        return map
+    }, [preSpecItems])
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
     const [monthPage, setMonthPage] = useState(0)
     const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'pre-spec' | 'ax-bpr-isp' | 'ax-pre-spec' | 'settings'>('dashboard')
@@ -139,6 +151,18 @@ function App() {
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' })
             }
         }, 100)
+    }
+
+    // 사전규격 목록 → 연결된 입찰공고로 이동.
+    // 공고가 아직 수집 범위에 없을 수 있어 못 찾으면 알린다.
+    const handleOpenBid = (bidNtceNo: string) => {
+        const target = bids.find(b => b.bid_id === bidNtceNo && !b.is_prediction)
+        if (!target) {
+            window.alert(`입찰공고 ${bidNtceNo} 은(는) 수집된 목록에 없습니다.\n(수집 기간 밖이거나 다른 키워드일 수 있습니다)`)
+            return
+        }
+        setSelectedYear(target.예상_연도)
+        handleBidClick(target)
     }
 
     const handleEdit = (bid: Bid) => {
@@ -304,7 +328,7 @@ function App() {
                     {/* Scrollable Area */}
                     {activeTab === 'pre-spec' || activeTab === 'ax-pre-spec' ? (
                         <div className="flex-1 overflow-hidden h-full">
-                            <PreSpecFinder />
+                            <PreSpecFinder onOpenBid={handleOpenBid} />
                         </div>
                     ) : activeTab === 'ax-bpr-isp' ? (
                         <div className="flex-1 overflow-hidden h-full">
@@ -584,6 +608,26 @@ function App() {
                                                                                             <span className="text-white font-black">₩{formatAmount(bid.입찰금액_1순위)}</span>
                                                                                         </div>
                                                                                     )}
+                                                                                    {/* 역방향 링크: 이 공고에 선행 사전규격이 있었는지 */}
+                                                                                    {!bid.is_prediction && (() => {
+                                                                                        const spec = preSpecByBidNo.get(bid.bid_id)
+                                                                                        if (!spec) return null
+                                                                                        const lead = spec.postedAt
+                                                                                            ? Math.max(0, Math.round(
+                                                                                                (new Date(bid.예상_입찰일).getTime()
+                                                                                                    - new Date(spec.postedAt.replace(' ', 'T')).getTime()) / 86400000))
+                                                                                            : null
+                                                                                        return (
+                                                                                            <button
+                                                                                                onClick={(e) => { e.stopPropagation(); setActiveTab('pre-spec'); }}
+                                                                                                className="w-full mt-2 py-1.5 bg-blue-400/30 text-white text-[10px] font-bold rounded-lg hover:bg-blue-400/50 transition-all flex items-center justify-center gap-1"
+                                                                                                title={spec.title}
+                                                                                            >
+                                                                                                <FileText size={10} />
+                                                                                                사전규격 있었음{lead !== null ? ` (${lead}일 전 접수)` : ''}
+                                                                                            </button>
+                                                                                        )
+                                                                                    })()}
                                                                                     {!bid.is_prediction && (
                                                                                         <button
                                                                                             onClick={(e) => { e.stopPropagation(); handleEdit(bid); }}
