@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertCircle, Clock, ExternalLink, FileText, Phone, Search, X } from 'lucide-react';
+import { AlertCircle, ExternalLink, FileText, Phone, Search } from 'lucide-react';
 import { usePreSpecs } from '../hooks/usePreSpecs';
 import { PreSpecItem } from '../types';
 
@@ -35,6 +35,8 @@ export interface ResolvedBid {
 interface Props {
     /** 공고번호로 대시보드의 공고를 찾는다. 실제 공고URL(차수 포함)을 얻기 위함. */
     resolveBid?: (bidNtceNo: string) => ResolvedBid | null;
+    /** 진입 시 선택할 필터. 대시보드 카드에서 들어오면 '의견중'으로 연다. */
+    initialStatus?: StatusFilter;
 }
 
 /**
@@ -45,51 +47,11 @@ const bidUrl = (no: string, ord: string, resolved: ResolvedBid | null) =>
     resolved?.url
     || `https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=${no}&bidPbancOrd=${ord || '000'}`;
 
-const BANNER_HIDE_KEY = 'prespec_banner_hidden_until';
-
-/** 오늘 하루 숨김이 유효한지. CollectionStatusModal 과 같은 방식. */
-const bannerHiddenToday = () => {
-    const until = localStorage.getItem(BANNER_HIDE_KEY);
-    return !!until && new Date() <= new Date(until);
-};
-
-const PreSpecFinder = ({ resolveBid }: Props) => {
-    const { items, imminentOpinions, loading, error } = usePreSpecs();
+const PreSpecFinder = ({ resolveBid, initialStatus = 'all' }: Props) => {
+    const { items, loading, error } = usePreSpecs();
     const [query, setQuery] = useState('');
-    const [status, setStatus] = useState<StatusFilter>('all');
+    const [status, setStatus] = useState<StatusFilter>(initialStatus);
     const [swOnly, setSwOnly] = useState(false);
-    const [showBanner, setShowBanner] = useState(() => !bannerHiddenToday());
-    const [hideToday, setHideToday] = useState(false);
-    const [focusedId, setFocusedId] = useState<string | null>(null);
-
-    const dismissBanner = () => {
-        if (hideToday) {
-            const now = new Date();
-            const until = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-            localStorage.setItem(BANNER_HIDE_KEY, until.toISOString());
-        }
-        setShowBanner(false);
-    };
-
-    // 배너 항목 클릭 → 아래 목록의 해당 행으로 스크롤 + 강조.
-    // 필터에 걸려 안 보일 수 있으므로 '전체'로 되돌린다.
-    const focusItem = (id: string) => {
-        setStatus('all');
-        setQuery('');
-        setSwOnly(false);
-        setFocusedId(id);
-        setTimeout(() => {
-            document.getElementById(`prespec-${id}`)
-                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 60);
-        setTimeout(() => setFocusedId(null), 2600);
-    };
-
-    // 배너 색은 가장 급한 건에 맞춘다. 여유 있는 건만 남았는데 빨갛게 두면 신호가 무뎌진다.
-    const topDday = imminentOpinions[0]?.dday ?? 99;
-    const bannerTone = topDday <= 3
-        ? { box: 'border-red-100 bg-red-50/60', icon: 'text-red-600', title: 'text-red-700', count: 'text-red-600 bg-red-100' }
-        : { box: 'border-amber-100 bg-amber-50/60', icon: 'text-amber-600', title: 'text-amber-700', count: 'text-amber-600 bg-amber-100' };
 
     const filtered = useMemo(() => {
         return items.filter(i => {
@@ -101,6 +63,10 @@ const PreSpecFinder = ({ resolveBid }: Props) => {
             if (status === 'waiting') return !i.isNoticed;
             if (status === 'noticed') return i.isNoticed;
             return true;
+        }).sort((a, b) => {
+            // '의견중'은 마감 임박 순으로 모아 본다. 그 외는 최신 접수순(서버 정렬) 유지.
+            if (status !== 'open') return 0;
+            return (a.dday ?? 99) - (b.dday ?? 99);
         });
     }, [items, query, status, swOnly]);
 
@@ -134,55 +100,6 @@ const PreSpecFinder = ({ resolveBid }: Props) => {
 
     return (
         <div className="flex flex-col h-full bg-[#F8FAFC]">
-            {/* 의견등록 마감 임박 배너. 상시 소수라 목록이 아니라 상단 알림으로 둔다. */}
-            {showBanner && imminentOpinions.length > 0 && (
-                <div className="bg-white border-b border-slate-200 px-8 pt-5">
-                    <div className={`rounded-2xl border p-4 ${bannerTone.box}`}>
-                        <div className="flex items-center gap-2 mb-3">
-                            <Clock size={15} className={bannerTone.icon} />
-                            <span className={`text-xs font-bold ${bannerTone.title}`}>의견등록 마감 임박</span>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${bannerTone.count}`}>
-                                {imminentOpinions.length}건
-                            </span>
-
-                            <label className="ml-auto flex items-center gap-1.5 cursor-pointer select-none"
-                                title="오늘 하루 이 배너를 숨깁니다">
-                                <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${hideToday ? 'bg-slate-600 border-slate-600' : 'bg-white border-slate-300'}`}>
-                                    {hideToday && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
-                                </div>
-                                <input type="checkbox" className="hidden" checked={hideToday}
-                                    onChange={(e) => setHideToday(e.target.checked)} />
-                                <span className="text-[11px] font-bold text-slate-500">오늘 하루 보지 않기</span>
-                            </label>
-
-                            <button
-                                onClick={dismissBanner}
-                                className="p-1 rounded-lg hover:bg-white/60 text-slate-400 hover:text-slate-600 transition-colors"
-                                title="닫기"
-                            >
-                                <X size={14} />
-                            </button>
-                        </div>
-                        <div className="space-y-2">
-                            {imminentOpinions.slice(0, 5).map(i => {
-                                const b = ddayBadge(i.dday)!;
-                                return (
-                                    <button
-                                        key={i.id}
-                                        onClick={() => focusItem(i.id)}
-                                        className="w-full flex items-center gap-3 text-xs text-left rounded-lg px-1 py-0.5 hover:bg-white/70 transition-colors"
-                                    >
-                                        <span className={`px-2 py-0.5 rounded-lg font-bold shrink-0 ${b.cls}`}>{b.text}</span>
-                                        <span className="font-bold text-slate-700 truncate hover:underline">{i.title}</span>
-                                        <span className="text-slate-400 shrink-0 ml-auto">{formatMoney(i.amount)}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* 필터 바 */}
             <div className="bg-white border-b border-slate-200 px-8 py-5 flex flex-col gap-4 shadow-sm z-10">
                 <div className="flex flex-wrap items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -235,7 +152,6 @@ const PreSpecFinder = ({ resolveBid }: Props) => {
                                 key={`${item.source}-${item.id}`}
                                 item={item}
                                 resolveBid={resolveBid}
-                                focused={focusedId === item.id}
                             />
                         ))}
                     </div>
@@ -245,10 +161,9 @@ const PreSpecFinder = ({ resolveBid }: Props) => {
     );
 };
 
-const Row = ({ item, resolveBid, focused }: {
+const Row = ({ item, resolveBid }: {
     item: PreSpecItem;
     resolveBid?: (n: string) => ResolvedBid | null;
-    focused?: boolean;
 }) => {
     const badge = ddayBadge(item.dday);
     const isPlan = item.source === 'order_plan';
@@ -265,9 +180,7 @@ const Row = ({ item, resolveBid, focused }: {
     return (
         <div
             id={`prespec-${item.id}`}
-            className={`bg-white rounded-2xl border p-5 transition-all scroll-mt-4 ${focused
-                ? 'border-blue-400 ring-2 ring-blue-200 shadow-md'
-                : 'border-slate-100 hover:border-blue-200 hover:shadow-sm'}`}
+            className="bg-white rounded-2xl border border-slate-100 p-5 transition-all hover:border-blue-200 hover:shadow-sm"
         >
             <div className="flex items-start gap-3">
                 <span className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold ${isPlan

@@ -14,6 +14,7 @@ import {
     Globe,
     Bell,
     Award,
+    Clock,
     Settings,
     Trash2
 } from 'lucide-react'
@@ -70,6 +71,8 @@ function App() {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'pre-spec' | 'ax-bpr-isp' | 'ax-pre-spec' | 'settings'>('dashboard')
     const [selectedBidId, setSelectedBidId] = useState<string | null>(null)
     const [showCollectionModal, setShowCollectionModal] = useState(false)
+    // 사전규격 탭 진입 시 어떤 필터로 열지. 대시보드 카드로 들어오면 '의견중'.
+    const [preSpecFilter, setPreSpecFilter] = useState<'all' | 'open'>('all')
     const [searchQuery, setSearchQuery] = useState('')
 
     // 용역기간 편집 상태
@@ -252,7 +255,7 @@ function App() {
                                         <span className="text-xs">공고 리스트</span>
                                     </button>
                                     <button
-                                        onClick={() => setActiveTab('pre-spec')}
+                                        onClick={() => { setPreSpecFilter('all'); setActiveTab('pre-spec') }}
                                         className={`w-full flex items-center gap-3 px-5 py-3 rounded-xl font-bold transition-all ${activeTab === 'pre-spec' ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
                                     >
                                         <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'pre-spec' ? 'bg-blue-400' : 'bg-slate-600'}`} />
@@ -343,7 +346,7 @@ function App() {
                     {/* Scrollable Area */}
                     {activeTab === 'pre-spec' || activeTab === 'ax-pre-spec' ? (
                         <div className="flex-1 overflow-hidden h-full">
-                            <PreSpecFinder resolveBid={resolveBid} />
+                            <PreSpecFinder key={preSpecFilter} resolveBid={resolveBid} initialStatus={preSpecFilter} />
                         </div>
                     ) : activeTab === 'ax-bpr-isp' ? (
                         <div className="flex-1 overflow-hidden h-full">
@@ -363,7 +366,7 @@ function App() {
                                         {/* Left Side: Stats + Chart */}
                                         <div className="lg:col-span-2 flex flex-col gap-8">
                                             {/* Annual Stats Row */}
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                                                 <div className="bg-white rounded-[32px] p-7 shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow">
                                                     <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
                                                         <WonSign size={28} />
@@ -397,6 +400,40 @@ function App() {
                                                         </p>
                                                     </div>
                                                 </div>
+                                                {/* 의견등록 마감 임박 — 규격을 바꿀 수 있는 유일한 창구이고
+                                                    창이 중앙값 5일뿐이라 홈에서 바로 보이게 둔다. */}
+                                                <button
+                                                    onClick={() => { setPreSpecFilter('open'); setActiveTab('pre-spec') }}
+                                                    className={`text-left bg-white rounded-[32px] p-7 shadow-sm border flex items-center gap-5 transition-all ${imminentOpinions.length > 0
+                                                        ? 'border-red-200 hover:shadow-md hover:border-red-300'
+                                                        : 'border-slate-200 hover:shadow-md'}`}
+                                                >
+                                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${imminentOpinions.length > 0
+                                                        ? 'bg-red-50 text-red-600'
+                                                        : 'bg-slate-100 text-slate-400'}`}>
+                                                        <Clock size={28} />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">의견등록 마감 임박</p>
+                                                        {imminentOpinions.length > 0 ? (
+                                                            <>
+                                                                <p className="text-2xl font-black text-slate-800">
+                                                                    {imminentOpinions.length} <span className="text-sm font-bold text-slate-400">건</span>
+                                                                    <span className="ml-2 text-sm font-black text-red-600">
+                                                                        최단 D-{imminentOpinions[0].dday}
+                                                                    </span>
+                                                                </p>
+                                                                <p className="text-[11px] font-bold text-slate-400 truncate mt-0.5">
+                                                                    {imminentOpinions[0].title}
+                                                                </p>
+                                                            </>
+                                                        ) : (
+                                                            <p className="text-2xl font-black text-slate-300">
+                                                                0 <span className="text-sm font-bold text-slate-300">건</span>
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </button>
                                             </div>
 
                                             {/* Main Chart */}
