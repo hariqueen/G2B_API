@@ -13,7 +13,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google-cloud/firestore": "^7.10.0",
     "clsx": "^2.1.1",
     "express": "^4.21.0",
     "firebase": "^10.12.2",

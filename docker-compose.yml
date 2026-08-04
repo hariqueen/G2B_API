@@ -11,9 +11,6 @@ services:
       - "3004:3001"
     env_file:
       - .env
-    volumes:
-      # 서비스 계정 키는 이미지에 굽지 않고 런타임에 읽기전용 마운트
-      - ./firestore-key.json:/app/firestore-key.json:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
