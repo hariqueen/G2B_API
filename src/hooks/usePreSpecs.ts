@@ -23,6 +23,24 @@ const daysUntil = (raw: string) => {
     return Math.round((target.getTime() - today.getTime()) / 86400000);
 };
 
+/**
+ * bidNtceNoList 를 {공고번호, 차수} 로 분해한다.
+ * 발주계획은 16자(번호13 + 차수3)로 오고, 사전규격은 13자로 차수가 없다.
+ * 차수는 공고 URL(bidPbancOrd)에 필요하며 실측상 8%가 000이 아니다.
+ */
+const parseRefs = (raw: string) => {
+    const out: { no: string; ord: string }[] = [];
+    String(raw || '').split(',').forEach(part => {
+        const t = part.trim();
+        if (!t) return;
+        const ref = (t.length === 16 && /^\d{3}$/.test(t.slice(-3)))
+            ? { no: t.slice(0, -3), ord: t.slice(-3) }
+            : { no: t.split('-')[0], ord: '' };
+        if (ref.no && !out.some(x => x.no === ref.no)) out.push(ref);
+    });
+    return out;
+};
+
 const toItem = (doc: any): PreSpecItem => {
     const isPlan = doc._source === 'order_plan';
     const deadlineAt = doc.opninRgstClseDt || '';
@@ -49,6 +67,7 @@ const toItem = (doc: any): PreSpecItem => {
             ? doc.ntceNticeYn === 'Y'
             : (doc.bidNtceNos?.length ?? 0) > 0,
         bidNtceNos: doc.bidNtceNos || [],
+        bidRefs: parseRefs(doc.bidNtceNoList),
         specDocUrls: doc.specDocUrls || [],
         keywords: doc._keywords || [],
         raw: doc

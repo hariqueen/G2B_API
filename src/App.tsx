@@ -172,16 +172,12 @@ function App() {
         }, 100)
     }
 
-    // 사전규격 목록 → 연결된 입찰공고로 이동.
-    // 공고가 아직 수집 범위에 없을 수 있어 못 찾으면 알린다.
-    const handleOpenBid = (bidNtceNo: string) => {
+    // 사전규격 목록에서 공고번호로 대시보드 보유 공고를 찾는다.
+    // 공고URL은 차수(bidPbancOrd)가 포함된 실제 값이라 조립하지 않고 그대로 쓴다.
+    const resolveBid = (bidNtceNo: string) => {
         const target = bids.find(b => b.bid_id === bidNtceNo && !b.is_prediction)
-        if (!target) {
-            window.alert(`입찰공고 ${bidNtceNo} 은(는) 수집된 목록에 없습니다.\n(수집 기간 밖이거나 다른 키워드일 수 있습니다)`)
-            return
-        }
-        setSelectedYear(target.예상_연도)
-        handleBidClick(target)
+        if (!target || !target.공고URL) return null
+        return { url: target.공고URL, title: target.공고명 }
     }
 
     const handleEdit = (bid: Bid) => {
@@ -347,7 +343,7 @@ function App() {
                     {/* Scrollable Area */}
                     {activeTab === 'pre-spec' || activeTab === 'ax-pre-spec' ? (
                         <div className="flex-1 overflow-hidden h-full">
-                            <PreSpecFinder onOpenBid={handleOpenBid} />
+                            <PreSpecFinder resolveBid={resolveBid} />
                         </div>
                     ) : activeTab === 'ax-bpr-isp' ? (
                         <div className="flex-1 overflow-hidden h-full">

@@ -49,6 +49,8 @@ export interface PreSpecItem {
     orderYm: string;            // 발주예정 YYYY-MM (발주계획만)
     isNoticed: boolean;         // 공고 전환 여부
     bidNtceNos: string[];       // 정규화된 관련 입찰공고번호
+    /** 공고번호 + 차수. 발주계획은 차수가 붙어 오고(001 등 8%), 사전규격은 없다. */
+    bidRefs: { no: string; ord: string }[];
     specDocUrls: string[];      // 규격서 파일 URL (사전규격만)
     keywords: string[];         // 매칭된 검색 키워드
     raw: any;

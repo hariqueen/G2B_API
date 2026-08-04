@@ -26,12 +26,26 @@ const ddayBadge = (dday: number | null) => {
     return { text: `D-${dday}`, cls: 'bg-slate-100 text-slate-500' };
 };
 
-interface Props {
-    /** 관련 입찰공고로 이동. 공고번호를 넘긴다. */
-    onOpenBid?: (bidNtceNo: string) => void;
+/** 대시보드가 보유한 공고 정보. 없으면 null. */
+export interface ResolvedBid {
+    url: string;
+    title: string;
 }
 
-const PreSpecFinder = ({ onOpenBid }: Props) => {
+interface Props {
+    /** 공고번호로 대시보드의 공고를 찾는다. 실제 공고URL(차수 포함)을 얻기 위함. */
+    resolveBid?: (bidNtceNo: string) => ResolvedBid | null;
+}
+
+/**
+ * 공고 상세 URL. 대시보드가 보유한 실제 URL을 우선 쓰고,
+ * 없을 때만 번호로 조립한다(차수를 모르면 000 가정이라 부정확할 수 있다).
+ */
+const bidUrl = (no: string, ord: string, resolved: ResolvedBid | null) =>
+    resolved?.url
+    || `https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=${no}&bidPbancOrd=${ord || '000'}`;
+
+const PreSpecFinder = ({ resolveBid }: Props) => {
     const { items, openOpinions, loading, error } = usePreSpecs();
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<StatusFilter>('all');
@@ -155,7 +169,7 @@ const PreSpecFinder = ({ onOpenBid }: Props) => {
                 ) : (
                     <div className="space-y-3">
                         {filtered.map(item => (
-                            <Row key={`${item.source}-${item.id}`} item={item} onOpenBid={onOpenBid} />
+                            <Row key={`${item.source}-${item.id}`} item={item} resolveBid={resolveBid} />
                         ))}
                     </div>
                 )}
@@ -164,9 +178,18 @@ const PreSpecFinder = ({ onOpenBid }: Props) => {
     );
 };
 
-const Row = ({ item, onOpenBid }: { item: PreSpecItem; onOpenBid?: (n: string) => void }) => {
+const Row = ({ item, resolveBid }: { item: PreSpecItem; resolveBid?: (n: string) => ResolvedBid | null }) => {
     const badge = ddayBadge(item.dday);
     const isPlan = item.source === 'order_plan';
+
+    // 참조하는 공고를 전부 개별 링크로 노출한다.
+    // 이전에는 건수만 표시하고 첫 건만 열어 나머지가 보이지 않았다.
+    const refs = (item.bidRefs.length ? item.bidRefs : item.bidNtceNos.map(no => ({ no, ord: '' })))
+        .map(r => {
+            const resolved = resolveBid?.(r.no) ?? null;
+            return { ...r, resolved, url: bidUrl(r.no, r.ord, resolved) };
+        });
+    const primary = refs[0];
 
     return (
         <div className="bg-white rounded-2xl border border-slate-100 p-5 hover:border-blue-200 hover:shadow-sm transition-all">
@@ -179,7 +202,19 @@ const Row = ({ item, onOpenBid }: { item: PreSpecItem; onOpenBid?: (n: string) =
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-bold text-slate-800">{item.title}</h4>
+                        {/* 공고 리스트와 동일하게 제목 클릭 시 나라장터 공고 상세로 이동 */}
+                        {primary ? (
+                            <a
+                                href={primary.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-bold text-slate-800 hover:text-blue-600 hover:underline transition-colors"
+                            >
+                                {item.title}
+                            </a>
+                        ) : (
+                            <h4 className="text-sm font-bold text-slate-800">{item.title}</h4>
+                        )}
                         {badge && (
                             <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${badge.cls}`}>
                                 {badge.text}
@@ -223,14 +258,21 @@ const Row = ({ item, onOpenBid }: { item: PreSpecItem; onOpenBid?: (n: string) =
                                 <FileText size={11} /> 규격서 {idx + 1}
                             </a>
                         ))}
-                        {item.bidNtceNos.length > 0 && (
-                            <button
-                                onClick={() => onOpenBid?.(item.bidNtceNos[0])}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-600 hover:bg-blue-100"
+                        {refs.map((r, idx) => (
+                            <a
+                                key={r.no}
+                                href={r.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={r.resolved?.title || r.no}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 max-w-[280px]"
                             >
-                                <ExternalLink size={11} /> 연결된 입찰공고 {item.bidNtceNos.length}건
-                            </button>
-                        )}
+                                <ExternalLink size={11} className="shrink-0" />
+                                <span className="truncate">
+                                    공고{refs.length > 1 ? ` ${idx + 1}` : ''} · {r.resolved?.title || r.no}
+                                </span>
+                            </a>
+                        ))}
                     </div>
                 </div>
             </div>
