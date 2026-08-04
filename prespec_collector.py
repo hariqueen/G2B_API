@@ -9,6 +9,7 @@
 API 스펙: 조달청API_발주계획_사전규격_스펙.md
 """
 
+import re
 import time
 from datetime import datetime, timedelta
 from urllib.parse import unquote
@@ -26,6 +27,18 @@ PLAN_URL = ("https://apis.data.go.kr/1230000/ao/OrderPlanSttusService"
 
 SPEC_COLLECTION = "pre_spec_list"
 PLAN_COLLECTION = "order_plan_list"
+
+# 대시보드 도메인 구분. 콜센터 키워드는 RTDB /search_keywords 에서 받아 쓰고,
+# AX/BPR/ISP 는 여기에 고정한다 (AX 탭이 이 세 가지를 묶어 부른다).
+DOMAIN_CALLCENTER = "callcenter"
+DOMAIN_AX = "ax"
+AX_KEYWORDS = ["AX", "BPR", "ISP"]
+
+# 영문 약어는 API 가 부분일치로 잡아 Axial / Maxwell / Taxonomy / AXIS 같은
+# 오탐이 섞인다(실측 173건 중 14건, 8%). 단어 경계로 다시 거른다.
+_ACRONYM_RE = {
+    kw: re.compile(rf"(?<![A-Za-z]){kw}(?![A-Za-z])", re.I) for kw in AX_KEYWORDS
+}
 
 ROWS_PER_PAGE = 999          # 999까지 정상 동작 확인
 MAX_RANGE_DAYS = 365         # 366일부터 resultCode 07 (입력범위값 초과)
@@ -143,32 +156,44 @@ def _collect(url: str, keyword_param: str, keyword: str, extra: dict) -> list[di
     return rows
 
 
-def fetch_pre_specs(keywords: list[str]) -> dict[str, dict]:
-    """사전규격. 키 = bfSpecRgstNo"""
+def _keep(kw: str, title: str) -> bool:
+    """영문 약어 키워드는 단어 경계로 재검증한다. 한글 키워드는 그대로 통과."""
+    rx = _ACRONYM_RE.get(kw.upper())
+    return True if rx is None else bool(rx.search(title or ""))
+
+
+def fetch_pre_specs(targets: list[tuple[str, str]]) -> dict[str, dict]:
+    """사전규격. 키 = bfSpecRgstNo. targets = [(키워드, 도메인), ...]"""
     uniq: dict[str, dict] = {}
-    for kw in keywords:
+    for kw, domain in targets:
         try:
             rows = _collect(SPEC_URL, "prdctClsfcNoNm", kw, {"inqryDiv": "1"})
         except Exception as exc:
             print(f"  [사전규격] '{kw}' 수집 실패: {exc}")
             continue
+        kept = 0
         for r in rows:
             key = (r.get("bfSpecRgstNo") or "").strip()
-            if not key:
+            if not key or not _keep(kw, r.get("prdctClsfcNoNm")):
                 continue
+            kept += 1
             hit = uniq.setdefault(key, r)
             hit.setdefault("_keywords", [])
+            hit.setdefault("_domains", [])
             if kw not in hit["_keywords"]:
                 hit["_keywords"].append(kw)
-        print(f"  [사전규격] '{kw}': {len(rows)}건")
+            if domain not in hit["_domains"]:
+                hit["_domains"].append(domain)
+        drop = len(rows) - kept
+        print(f"  [사전규격][{domain}] '{kw}': {kept}건" + (f" (오탐 {drop}건 제외)" if drop else ""))
     return uniq
 
 
-def fetch_order_plans(keywords: list[str]) -> dict[str, dict]:
-    """발주계획. 키 = orderPlanUntyNo"""
+def fetch_order_plans(targets: list[tuple[str, str]]) -> dict[str, dict]:
+    """발주계획. 키 = orderPlanUntyNo. targets = [(키워드, 도메인), ...]"""
     now = _now_kst()
     uniq: dict[str, dict] = {}
-    for kw in keywords:
+    for kw, domain in targets:
         try:
             rows = _collect(PLAN_URL, "bizNm", kw, {
                 "orderBgnYm": f"{now.year - 1}01",
@@ -177,15 +202,21 @@ def fetch_order_plans(keywords: list[str]) -> dict[str, dict]:
         except Exception as exc:
             print(f"  [발주계획] '{kw}' 수집 실패: {exc}")
             continue
+        kept = 0
         for r in rows:
             key = (r.get("orderPlanUntyNo") or "").strip()
-            if not key:
+            if not key or not _keep(kw, r.get("bizNm")):
                 continue
+            kept += 1
             hit = uniq.setdefault(key, r)
             hit.setdefault("_keywords", [])
+            hit.setdefault("_domains", [])
             if kw not in hit["_keywords"]:
                 hit["_keywords"].append(kw)
-        print(f"  [발주계획] '{kw}': {len(rows)}건")
+            if domain not in hit["_domains"]:
+                hit["_domains"].append(domain)
+        drop = len(rows) - kept
+        print(f"  [발주계획][{domain}] '{kw}': {kept}건" + (f" (오탐 {drop}건 제외)" if drop else ""))
     return uniq
 
 
@@ -196,6 +227,7 @@ def _normalize(record: dict, source: str) -> dict:
         out[k] = v.isoformat() if isinstance(v, datetime) else v
 
     out["_source"] = source
+    out["_domains"] = record.get("_domains") or []
     out["bidNtceNos"] = split_bid_nos(record.get("bidNtceNoList"))
     out["collectedAt"] = _now_kst().isoformat()
 
@@ -292,9 +324,14 @@ def collect_prespec_data(keywords: list[str]) -> dict:
         print(f"[사전규격] Firestore 초기화 실패: {exc}. 수집을 건너뜁니다.")
         return result
 
-    specs = fetch_pre_specs(keywords)
+    # 콜센터 도메인은 대시보드 설정 탭(RTDB)에서 관리하는 키워드,
+    # AX 도메인은 AX/BPR/ISP 고정. 한 건이 양쪽에 걸릴 수 있어 _domains 는 배열이다.
+    targets = ([(kw, DOMAIN_CALLCENTER) for kw in keywords]
+               + [(kw, DOMAIN_AX) for kw in AX_KEYWORDS])
+
+    specs = fetch_pre_specs(targets)
     print(f"  [사전규격] 고유 {len(specs)}건")
-    plans = fetch_order_plans(keywords)
+    plans = fetch_order_plans(targets)
     print(f"  [발주계획] 고유 {len(plans)}건")
 
     try:
