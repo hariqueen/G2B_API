@@ -76,6 +76,7 @@ function App() {
     const [searchQuery, setSearchQuery] = useState('')
     // 공고 리스트 구분 필터. 실적이 기본값 — 예측은 추정치라 목록의 기준선은 실적이다.
     const [listKind, setListKind] = useState<'all' | 'actual' | 'pred'>('actual')
+    const [listPage, setListPage] = useState(1)
 
     // 용역기간 편집 상태
     const [editingBid, setEditingBid] = useState<Bid | null>(null)
@@ -86,6 +87,9 @@ function App() {
             setShowCollectionModal(true)
         }
     }, [])
+
+    // 검색어·구분·연도가 바뀌면 목록이 달라지므로 1페이지로 되돌린다.
+    useEffect(() => { setListPage(1) }, [searchQuery, listKind, selectedYear])
 
     const monthGroups = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]
     const currentMonths = monthGroups[monthPage]
@@ -274,7 +278,7 @@ function App() {
                                         className={`w-full flex items-center gap-3 px-5 py-3 rounded-xl font-bold transition-all ${activeTab === 'ax-pre-spec' ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
                                     >
                                         <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'ax-pre-spec' ? 'bg-blue-400' : 'bg-slate-600'}`} />
-                                        <span className="text-xs">사전규격</span>
+                                        <span className="text-xs">사전규격 리스트</span>
                                     </button>
                                 </div>
                             </div>
@@ -395,7 +399,9 @@ function App() {
                                                     창이 중앙값 5일뿐이라 홈에서 바로 보이게 둔다. */}
                                                 <button
                                                     onClick={() => { setPreSpecFilter('open'); setActiveTab('pre-spec') }}
-                                                    title={imminentOpinions.length > 0 ? imminentOpinions[0].title : '의견등록 마감이 임박한 사전규격이 없습니다'}
+                                                    title={imminentOpinions.length > 0
+                                                        ? '사전규격 리스트의 의견중 목록으로 이동'
+                                                        : '의견등록 마감이 임박한 사전규격이 없습니다'}
                                                     className={`text-left bg-white rounded-3xl p-5 shadow-sm border flex items-center gap-4 transition-all ${imminentOpinions.length > 0
                                                         ? 'border-red-200 hover:shadow-md hover:border-red-300'
                                                         : 'border-slate-200 hover:shadow-md'}`}
@@ -415,11 +421,6 @@ function App() {
                                                                 </span>
                                                             )}
                                                         </p>
-                                                        {imminentOpinions.length > 0 && (
-                                                            <p className="text-[10px] font-bold text-slate-400 truncate">
-                                                                {imminentOpinions[0].title}
-                                                            </p>
-                                                        )}
                                                     </div>
                                                 </button>
                                             </div>
@@ -736,8 +737,30 @@ function App() {
                                             listKind === 'all' || (listKind === 'pred' ? b.is_prediction : !b.is_prediction)
                                         )
                                         .sort((a, b) => dateOf(b) - dateOf(a));
+
+                                    // 페이지네이션. 삭제·필터로 건수가 줄어 현재 페이지가 범위를 벗어나면
+                                    // 빈 화면이 되므로 마지막 페이지로 당겨서 쓴다.
+                                    const PAGE_SIZE = 30
+                                    const totalPages = Math.max(1, Math.ceil(filteredBids.length / PAGE_SIZE))
+                                    const page = Math.min(Math.max(1, listPage), totalPages)
+                                    const startIdx = (page - 1) * PAGE_SIZE
+                                    const pageBids = filteredBids.slice(startIdx, startIdx + PAGE_SIZE)
+
+                                    // 페이지 번호는 현재 페이지 기준 최대 5개 창으로 보여준다.
+                                    const winStart = Math.max(1, Math.min(page - 2, totalPages - 4))
+                                    const pageNums = Array.from(
+                                        { length: Math.min(5, totalPages) },
+                                        (_, i) => winStart + i
+                                    )
+
+                                    // 페이지를 넘길 때마다 목록 머리로 올려준다 — 스크롤 위치가 남으면
+                                    // 새 페이지 중간부터 보이게 된다.
+                                    const goPage = (p: number) => {
+                                        setListPage(Math.min(Math.max(1, p), totalPages))
+                                        document.getElementById('bid-list-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                    }
                                     return (
-                                        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+                                        <div id="bid-list-top" className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm scroll-mt-6">
                                             <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                                                 <div className="flex items-center gap-3">
                                                     <h3 className="font-bold text-lg">전체 입찰 공고 목록</h3>
@@ -786,7 +809,7 @@ function App() {
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-50">
-                                                        {filteredBids.map((bid) => (
+                                                        {pageBids.map((bid) => (
                                                             <tr key={bid.bid_id} className={`hover:bg-slate-50/80 transition-all ${bid.is_prediction ? 'bg-rose-50/30' : ''}`}>
                                                                 <td className="px-8 py-5">
                                                                     {bid.공고URL && !bid.is_prediction ? (
