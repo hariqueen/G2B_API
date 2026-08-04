@@ -1,9 +1,16 @@
 """
-사전규격 / 발주계획 나라장터 공고 수집 → Firestore (g2b-bid-finder) 적재 모듈.
+사전규격 / 발주계획 나라장터 공고 수집 → Realtime Database 적재 모듈.
 
 - API 키: BID_API_KEY (config.py에서 공유. 입찰공고 수집과 동일 키)
-- Firebase: ax_collector 의 init_firestore() 재사용 (앱 'ax_firestore')
-- 컬렉션: pre_spec_list (사전규격) / order_plan_list (발주계획)
+- Firebase: main.py 의 initialize_firebase() 가 띄운 기본 앱(RTDB)을 그대로 쓴다
+- 경로: /pre_specs/{bfSpecRgstNo}, /order_plans/{orderPlanUntyNo}
+
+RTDB 를 쓰는 이유:
+  Firestore 는 "문서 읽기 건수"로 과금해 1,387건 컬렉션을 한 번 훑을 때마다
+  1,387 read 가 나간다. 프론트가 전량을 받아 필터하는 구조라 무료 한도
+  (50,000 read/일)를 실제로 소진시킨 적이 있다. RTDB 는 "전송량" 과금이라
+  같은 데이터가 2MB 에 불과하고(한도 1GB 저장 / 10GB 월 전송), 클라이언트가
+  직접 읽을 수 있어 서버 라우트와 캐시 계층 자체가 필요 없다.
 
 기획 근거: 기획_사전규격_대시보드_반영.md
 API 스펙: 조달청API_발주계획_사전규격_스펙.md
@@ -25,8 +32,8 @@ SPEC_URL = ("https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService"
 PLAN_URL = ("https://apis.data.go.kr/1230000/ao/OrderPlanSttusService"
             "/getOrderPlanSttusListServcPPSSrch")
 
-SPEC_COLLECTION = "pre_spec_list"
-PLAN_COLLECTION = "order_plan_list"
+SPEC_PATH = "/pre_specs"
+PLAN_PATH = "/order_plans"
 
 # 대시보드 도메인 구분. 콜센터 키워드는 RTDB /search_keywords 에서 받아 쓰고,
 # AX/BPR/ISP 는 여기에 고정한다 (AX 탭이 이 세 가지를 묶어 부른다).
@@ -239,23 +246,30 @@ def _normalize(record: dict, source: str) -> dict:
     return out
 
 
-def upsert(db, collection: str, records: dict[str, dict], source: str) -> int:
+def _safe_key(raw: str) -> str:
+    """RTDB 키에 쓸 수 없는 문자(. $ # [ ] /)를 치환한다."""
+    out = str(raw)
+    for ch in ".$#[]/":
+        out = out.replace(ch, "_")
+    return out
+
+
+def upsert(path: str, records: dict[str, dict], source: str) -> int:
+    """RTDB 경로에 통째로 덮어쓴다.
+
+    키워드가 바뀌면 더 이상 대상이 아닌 건이 남을 수 있어 set() 으로 교체한다.
+    365일 창을 매번 새로 훑으므로 부분 갱신보다 전체 교체가 상태를 단순하게 한다.
+    """
+    from firebase_admin import db as rtdb
+
     if not records:
         print(f"  [{source}] 적재할 데이터가 없습니다.")
         return 0
 
-    batch = db.batch()
-    n = 0
-    for doc_id, rec in records.items():
-        batch.set(db.collection(collection).document(doc_id),
-                  _normalize(rec, source), merge=True)
-        n += 1
-        if n % 400 == 0:
-            batch.commit()
-            batch = db.batch()
-    batch.commit()
-    print(f"  [{source}] Firestore 적재 완료: {n}건 → {collection}")
-    return n
+    payload = {_safe_key(k): _normalize(v, source) for k, v in records.items()}
+    rtdb.reference(path).set(payload)
+    print(f"  [{source}] RTDB 적재 완료: {len(payload)}건 → {path}")
+    return len(payload)
 
 
 # ── 의견마감 임박 추출 ────────────────────────────────
@@ -295,7 +309,7 @@ def imminent_opinions(specs: dict[str, dict], days: int = 3) -> list[dict]:
 
 # ── 메인 ──────────────────────────────────────────────
 def collect_prespec_data(keywords: list[str]) -> dict:
-    """사전규격 + 발주계획을 수집해 Firestore에 적재한다.
+    """사전규격 + 발주계획을 수집해 RTDB에 적재한다.
 
     Returns:
         dict: {
@@ -314,15 +328,20 @@ def collect_prespec_data(keywords: list[str]) -> dict:
         return result
 
     print(f"\n{'='*50}")
-    print("🎯 [사전규격/발주계획] Firestore 수집 시작")
+    print("🎯 [사전규격/발주계획] RTDB 수집 시작")
     print(f"{'='*50}")
 
+    # RTDB 기본 앱은 main.py 가 초기화한다. 단독 실행 시를 대비해 한 번 더 확인.
     try:
-        from ax_collector import init_firestore
-        db = init_firestore()
-    except Exception as exc:
-        print(f"[사전규격] Firestore 초기화 실패: {exc}. 수집을 건너뜁니다.")
-        return result
+        import firebase_admin
+        firebase_admin.get_app()
+    except ValueError:
+        try:
+            from main import initialize_firebase
+            initialize_firebase()
+        except Exception as exc:
+            print(f"[사전규격] RTDB 초기화 실패: {exc}. 수집을 건너뜁니다.")
+            return result
 
     # 콜센터 도메인은 대시보드 설정 탭(RTDB)에서 관리하는 키워드,
     # AX 도메인은 AX/BPR/ISP 고정. 한 건이 양쪽에 걸릴 수 있어 _domains 는 배열이다.
@@ -335,10 +354,10 @@ def collect_prespec_data(keywords: list[str]) -> dict:
     print(f"  [발주계획] 고유 {len(plans)}건")
 
     try:
-        result["pre_spec_count"] = upsert(db, SPEC_COLLECTION, specs, "pre_spec")
-        result["order_plan_count"] = upsert(db, PLAN_COLLECTION, plans, "order_plan")
+        result["pre_spec_count"] = upsert(SPEC_PATH, specs, "pre_spec")
+        result["order_plan_count"] = upsert(PLAN_PATH, plans, "order_plan")
     except Exception as exc:
-        print(f"[사전규격] Firestore 적재 실패: {exc}")
+        print(f"[사전규격] RTDB 적재 실패: {exc}")
 
     result["imminent"] = imminent_opinions(specs, days=3)
     print(f"  [사전규격] 의견마감 D-3 이내: {len(result['imminent'])}건")
