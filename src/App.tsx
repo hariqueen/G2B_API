@@ -74,6 +74,8 @@ function App() {
     // 사전규격 탭 진입 시 어떤 필터로 열지. 대시보드 카드로 들어오면 '의견중'.
     const [preSpecFilter, setPreSpecFilter] = useState<'all' | 'open'>('all')
     const [searchQuery, setSearchQuery] = useState('')
+    // 공고 리스트 구분 필터. 실적이 기본값 — 예측은 추정치라 목록의 기준선은 실적이다.
+    const [listKind, setListKind] = useState<'all' | 'actual' | 'pred'>('actual')
 
     // 용역기간 편집 상태
     const [editingBid, setEditingBid] = useState<Bid | null>(null)
@@ -135,17 +137,6 @@ function App() {
             .sort((a, b) => dateOf(a).getTime() - dateOf(b).getTime())
             .slice(0, 10)
     }, [yearData])
-
-    // 발주계획 기반 '확정' 예정 건. 실측상 미래 예정은 18건 규모로 소수다.
-    // 위젯이 "다음 예정"이므로 selectedYear 와 무관하게 현재 이후를 본다.
-    const confirmedUpcoming = useMemo(() => {
-        const now = new Date()
-        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-        return preSpecItems
-            .filter(i => i.source === 'order_plan' && i.orderYm > ym && !i.isNoticed)
-            .sort((a, b) => a.orderYm.localeCompare(b.orderYm))
-            .slice(0, 5)
-    }, [preSpecItems])
 
     // 연간 통계 (원본 데이터만)
     const stats = useMemo(() => {
@@ -259,7 +250,7 @@ function App() {
                                         className={`w-full flex items-center gap-3 px-5 py-3 rounded-xl font-bold transition-all ${activeTab === 'pre-spec' ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
                                     >
                                         <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'pre-spec' ? 'bg-blue-400' : 'bg-slate-600'}`} />
-                                        <span className="text-xs">사전규격</span>
+                                        <span className="text-xs">사전규격 리스트</span>
                                         {openOpinionCount > 0 && (
                                             <span className="ml-auto px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px]">
                                                 {openOpinionCount}
@@ -366,37 +357,37 @@ function App() {
                                         {/* Left Side: Stats + Chart */}
                                         <div className="lg:col-span-2 flex flex-col gap-8">
                                             {/* Annual Stats Row */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                                                <div className="bg-white rounded-[32px] p-7 shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow">
-                                                    <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-                                                        <WonSign size={28} />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow">
+                                                    <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                                                        <WonSign size={20} />
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">연간 총 사업금액</p>
-                                                        <p className="text-2xl font-black text-slate-800">
-                                                            {formatAmount(stats.totalAmount)} <span className="text-sm font-bold text-slate-400">원</span>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[11px] font-bold text-slate-400 mb-0.5 truncate">연간 총 사업금액</p>
+                                                        <p className="text-xl font-black text-slate-800 whitespace-nowrap">
+                                                            {formatAmount(stats.totalAmount)} <span className="text-xs font-bold text-slate-400">원</span>
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <div className="bg-white rounded-[32px] p-7 shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow">
-                                                    <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
-                                                        <FileText size={28} />
+                                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow">
+                                                    <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
+                                                        <FileText size={20} />
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">연간 공고 수</p>
-                                                        <p className="text-2xl font-black text-slate-800">
-                                                            {stats.totalBids} <span className="text-sm font-bold text-slate-400">건</span>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[11px] font-bold text-slate-400 mb-0.5 truncate">연간 공고 수</p>
+                                                        <p className="text-xl font-black text-slate-800 whitespace-nowrap">
+                                                            {stats.totalBids} <span className="text-xs font-bold text-slate-400">건</span>
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <div className="bg-white rounded-[32px] p-7 shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow">
-                                                    <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                                                        <Award size={28} />
+                                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow">
+                                                    <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                                                        <Award size={20} />
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">낙찰 완료</p>
-                                                        <p className="text-2xl font-black text-slate-800">
-                                                            {stats.completedBids} <span className="text-sm font-bold text-slate-400">건 ({stats.completionRate}%)</span>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[11px] font-bold text-slate-400 mb-0.5 truncate">낙찰 완료</p>
+                                                        <p className="text-xl font-black text-slate-800 whitespace-nowrap">
+                                                            {stats.completedBids} <span className="text-xs font-bold text-slate-400">건 ({stats.completionRate}%)</span>
                                                         </p>
                                                     </div>
                                                 </div>
@@ -404,32 +395,29 @@ function App() {
                                                     창이 중앙값 5일뿐이라 홈에서 바로 보이게 둔다. */}
                                                 <button
                                                     onClick={() => { setPreSpecFilter('open'); setActiveTab('pre-spec') }}
-                                                    className={`text-left bg-white rounded-[32px] p-7 shadow-sm border flex items-center gap-5 transition-all ${imminentOpinions.length > 0
+                                                    title={imminentOpinions.length > 0 ? imminentOpinions[0].title : '의견등록 마감이 임박한 사전규격이 없습니다'}
+                                                    className={`text-left bg-white rounded-3xl p-5 shadow-sm border flex items-center gap-4 transition-all ${imminentOpinions.length > 0
                                                         ? 'border-red-200 hover:shadow-md hover:border-red-300'
                                                         : 'border-slate-200 hover:shadow-md'}`}
                                                 >
-                                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${imminentOpinions.length > 0
+                                                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${imminentOpinions.length > 0
                                                         ? 'bg-red-50 text-red-600'
                                                         : 'bg-slate-100 text-slate-400'}`}>
-                                                        <Clock size={28} />
+                                                        <Clock size={20} />
                                                     </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">의견등록 마감 임박</p>
-                                                        {imminentOpinions.length > 0 ? (
-                                                            <>
-                                                                <p className="text-2xl font-black text-slate-800">
-                                                                    {imminentOpinions.length} <span className="text-sm font-bold text-slate-400">건</span>
-                                                                    <span className="ml-2 text-sm font-black text-red-600">
-                                                                        최단 D-{imminentOpinions[0].dday}
-                                                                    </span>
-                                                                </p>
-                                                                <p className="text-[11px] font-bold text-slate-400 truncate mt-0.5">
-                                                                    {imminentOpinions[0].title}
-                                                                </p>
-                                                            </>
-                                                        ) : (
-                                                            <p className="text-2xl font-black text-slate-300">
-                                                                0 <span className="text-sm font-bold text-slate-300">건</span>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-[11px] font-bold text-slate-400 mb-0.5 truncate">의견등록 마감 임박</p>
+                                                        <p className="text-xl font-black text-slate-800 whitespace-nowrap">
+                                                            {imminentOpinions.length} <span className="text-xs font-bold text-slate-400">건</span>
+                                                            {imminentOpinions.length > 0 && (
+                                                                <span className="ml-1.5 text-xs font-black text-red-600">
+                                                                    최단 D-{imminentOpinions[0].dday}
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                        {imminentOpinions.length > 0 && (
+                                                            <p className="text-[10px] font-bold text-slate-400 truncate">
+                                                                {imminentOpinions[0].title}
                                                             </p>
                                                         )}
                                                     </div>
@@ -515,34 +503,6 @@ function App() {
                                                     <Calendar size={22} className="text-blue-500" /> 다음 예정 입찰 정보
                                                 </h3>
                                                 <div className="space-y-5">
-                                                    {/* 확정 레이어 — 발주계획에 등록된 미래 발주 건 */}
-                                                    {confirmedUpcoming.map((plan) => (
-                                                        <div
-                                                            key={`plan-${plan.id}`}
-                                                            onClick={() => setActiveTab('pre-spec')}
-                                                            className="group relative pl-6 border-l-2 border-violet-200 hover:border-violet-500 transition-colors py-1 cursor-pointer"
-                                                        >
-                                                            <div className="absolute -left-[5px] top-2 w-2 h-2 rounded-full bg-violet-400 group-hover:bg-violet-600 transition-colors" />
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{plan.orderYm}</p>
-                                                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-violet-50 text-violet-600">확정</span>
-                                                                {plan.amount > 0 && (
-                                                                    <span className="text-[9px] font-black text-violet-500">{formatAmount(plan.amount)}</span>
-                                                                )}
-                                                            </div>
-                                                            <p className="text-[13px] font-bold line-clamp-2 mt-0.5 leading-snug text-slate-700 group-hover:text-violet-700 transition-colors">
-                                                                {plan.title}
-                                                            </p>
-                                                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">
-                                                                {[plan.institution, plan.department, plan.officerTel].filter(Boolean).join(' · ')}
-                                                            </p>
-                                                        </div>
-                                                    ))}
-
-                                                    {confirmedUpcoming.length > 0 && upcomingBids.length > 0 && (
-                                                        <div className="border-t border-dashed border-slate-200 pt-1" />
-                                                    )}
-
                                                     {upcomingBids.slice(0, 7).map((bid) => (
                                                         <div
                                                             key={bid.bid_id}
@@ -760,11 +720,22 @@ function App() {
                                         return new Date(`${ym}-01`).getTime() || 0
                                     }
 
-                                    const filteredBids = yearData
-                                        .filter((b: Bid) =>
-                                            !searchQuery || b.공고명.includes(searchQuery) || b.실수요기관.includes(searchQuery)
+                                    const searched = yearData.filter(b =>
+                                        !searchQuery || b.공고명.includes(searchQuery) || b.실수요기관.includes(searchQuery)
+                                    )
+
+                                    // 구분 탭 건수는 검색 결과 기준 — 탭을 눌러보지 않아도 몇 건인지 보이게 한다.
+                                    const kindTabs: { key: typeof listKind; label: string; n: number }[] = [
+                                        { key: 'all', label: '전체', n: searched.length },
+                                        { key: 'actual', label: 'Actual', n: searched.filter(b => !b.is_prediction).length },
+                                        { key: 'pred', label: 'Pred', n: searched.filter(b => b.is_prediction).length }
+                                    ]
+
+                                    const filteredBids = searched
+                                        .filter(b =>
+                                            listKind === 'all' || (listKind === 'pred' ? b.is_prediction : !b.is_prediction)
                                         )
-                                        .sort((a: Bid, b: Bid) => dateOf(b) - dateOf(a));
+                                        .sort((a, b) => dateOf(b) - dateOf(a));
                                     return (
                                         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
                                             <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -774,15 +745,31 @@ function App() {
                                                         {filteredBids.length}건
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-4 bg-white border border-slate-200 px-4 py-2 rounded-xl w-72">
-                                                    <Search size={16} className="text-slate-400" />
-                                                    <input
-                                                        type="text"
-                                                        placeholder="공고명, 기관명 검색..."
-                                                        value={searchQuery}
-                                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                                        className="bg-transparent border-none outline-none text-xs w-full"
-                                                    />
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-1">
+                                                        {kindTabs.map(t => (
+                                                            <button
+                                                                key={t.key}
+                                                                onClick={() => setListKind(t.key)}
+                                                                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${listKind === t.key
+                                                                    ? 'bg-blue-600 text-white shadow-sm'
+                                                                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-700'}`}
+                                                            >
+                                                                {t.label} <span className="opacity-70">{t.n}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-4 bg-white border border-slate-200 px-4 py-2 rounded-xl w-72">
+                                                        <Search size={16} className="text-slate-400" />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="공고명, 기관명 검색..."
+                                                            value={searchQuery}
+                                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                                            className="bg-transparent border-none outline-none text-xs w-full"
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="overflow-x-auto">
