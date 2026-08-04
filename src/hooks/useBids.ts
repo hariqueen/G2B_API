@@ -2,6 +2,67 @@ import { useState, useEffect } from 'react';
 import { db, ref, onValue } from '../api/firebase';
 import { Bid } from '../types';
 
+/** 사업명에서 연도·차수·괄호 수식어를 걷어내 같은 사업끼리 묶이게 한다. */
+export const canonicalName = (name: string) =>
+    String(name || '')
+        .replace(/20\d{2}\s*년도?/g, '')
+        .replace(/['‘’]\d{2}\s*년도?/g, '')
+        .replace(/\([^)]*\)/g, '')
+        .replace(/\d+차/g, '')
+        .replace(/[\s\-_()[\]·,]/g, '');
+
+const median = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+};
+
+/**
+ * 같은 사업의 과거 공고 간격으로 재입찰 주기(개월)를 추정한다.
+ *
+ * 2개월 이내 연속 건은 재공고로 보고 하나로 합친다. 이 병합이 없으면
+ * 최빈 간격이 1개월로 잡혀 재공고를 연간 주기로 오인한다.
+ */
+export const deriveCycles = (rows: Bid[]): Map<string, number> => {
+    const groups = new Map<string, number[]>();
+
+    rows.forEach(b => {
+        const t = new Date(b.예상_입찰일).getTime();
+        if (isNaN(t)) return;
+        const key = canonicalName(b.공고명);
+        if (!key) return;
+        const arr = groups.get(key) || [];
+        arr.push(t);
+        groups.set(key, arr);
+    });
+
+    const out = new Map<string, number>();
+    groups.forEach((times, key) => {
+        const sorted = [...times].sort((a, b) => a - b).map(t => new Date(t));
+
+        // 재공고 병합: 직전 이벤트와 2개월 이내면 같은 건으로 본다
+        const events: Date[] = [];
+        sorted.forEach(d => {
+            const prev = events[events.length - 1];
+            const gap = prev
+                ? (d.getFullYear() * 12 + d.getMonth()) - (prev.getFullYear() * 12 + prev.getMonth())
+                : Infinity;
+            if (gap > 2) events.push(d);
+        });
+        if (events.length < 2) return;
+
+        const gaps: number[] = [];
+        for (let i = 1; i < events.length; i++) {
+            const g = (events[i].getFullYear() * 12 + events[i].getMonth())
+                - (events[i - 1].getFullYear() * 12 + events[i - 1].getMonth());
+            if (g >= 3 && g <= 48) gaps.push(g);   // 3개월 미만은 재공고 잔여로 본다
+        }
+        if (gaps.length) out.set(key, median(gaps));
+    });
+
+    return out;
+};
+
 export const useBids = () => {
     const [bids, setBids] = useState<Bid[]>([]);
     const [loading, setLoading] = useState(true);
@@ -67,11 +128,27 @@ export const useBids = () => {
                 // 제외(숨김) 처리된 공고 필터링 (/hidden_bids) - 원본과 예측 모두 숨김
                 const visibleRows = rows.filter(r => !hiddenData[r.bid_id]);
 
+                // 용역기간 자동 유도.
+                // 수동입력은 전체의 절반 수준이라 나머지는 예측이 아예 생성되지 않았다.
+                // 같은 사업의 과거 공고 간격으로 주기를 추정해 채운다.
+                // (실측: 재공고 병합 후 주기 중앙값 12개월, ±1이 59%)
+                const derivedCycle = deriveCycles(visibleRows);
+
                 // 예측 로직: 용역기간 기반으로 차기 입찰 예측
                 const predictions: Bid[] = [];
                 visibleRows.forEach(bid => {
-                    if (bid['용역기간(개월)'] > 0 && !bid.is_prediction) {
-                        const serviceMonths = bid['용역기간(개월)'];
+                    if (bid.is_prediction) return;
+
+                    const manual = bid['용역기간(개월)'];
+                    const derived = derivedCycle.get(canonicalName(bid.공고명));
+                    const serviceMonths = manual > 0 ? manual : (derived ?? 0);
+                    const durationSource: Bid['_durationSource'] =
+                        manual > 0 ? 'manual' : (derived ? 'derived' : 'none');
+
+                    bid._durationSource = durationSource;
+                    bid._effectiveDuration = serviceMonths;
+
+                    if (serviceMonths > 0) {
                         let currentDate = new Date(bid.예상_입찰일);
                         if (isNaN(currentDate.getTime())) {
                             currentDate = new Date(`${bid.예상_연도}-${String(bid.예상_입찰월).padStart(2, '0')}-01`);

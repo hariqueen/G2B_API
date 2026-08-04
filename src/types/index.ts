@@ -23,6 +23,10 @@ export interface Bid {
     ntceInsttOfclTelNo?: string;
     ntceSpecDocUrl1?: string;
     ntceSpecFileNm1?: string;
+    /** 예측에 쓴 용역기간의 출처. 신뢰도 표기에 사용한다. */
+    _durationSource?: 'manual' | 'derived' | 'none';
+    /** 실제 예측에 적용된 주기(개월). 수동입력이 없으면 이력에서 유도한 값. */
+    _effectiveDuration?: number;
     [key: string]: any; // Allow dynamic fields
 }
 

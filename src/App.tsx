@@ -116,14 +116,33 @@ function App() {
         })
     }, [yearData])
 
-    // 다음 예정 입찰 (예측 포함, 현재 이후 가장 가까운 순)
+    // 다음 예정 입찰 — 확정/예측 2층.
+    //   확정: 발주계획에 등록된 미래 발주 건 (발주기관이 직접 등록한 사실)
+    //   예측: 용역기간 기반 산술 추정. 3차는 최대 3년 뒤라 목록에서 제외한다.
+    // 발주계획은 게시월=발주예정월이 74%라 조기 신호로는 약하지만, 가까운 미래는
+    // 추정이 아닌 사실로 바꿔준다.
     const upcomingBids = useMemo(() => {
         const now = new Date()
+        const dateOf = (b: Bid) =>
+            new Date(b.예상_입찰일 || `${b.예상_연도}-${String(b.예상_입찰월).padStart(2, '0')}-01`)
+
         return [...yearData]
-            .filter(b => new Date(b.예상_입찰일 || `${b.예상_연도}-${String(b.예상_입찰월).padStart(2, '0')}-01`) >= now)
-            .sort((a, b) => new Date(a.예상_입찰일 || `${a.예상_연도}-${String(a.예상_입찰월).padStart(2, '0')}-01`).getTime() - new Date(b.예상_입찰일 || `${b.예상_연도}-${String(b.예상_입찰월).padStart(2, '0')}-01`).getTime())
+            .filter(b => dateOf(b) >= now)
+            .filter(b => !b.is_prediction || (b.prediction_count ?? 1) <= 2)
+            .sort((a, b) => dateOf(a).getTime() - dateOf(b).getTime())
             .slice(0, 10)
     }, [yearData])
+
+    // 발주계획 기반 '확정' 예정 건. 실측상 미래 예정은 18건 규모로 소수다.
+    // 위젯이 "다음 예정"이므로 selectedYear 와 무관하게 현재 이후를 본다.
+    const confirmedUpcoming = useMemo(() => {
+        const now = new Date()
+        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        return preSpecItems
+            .filter(i => i.source === 'order_plan' && i.orderYm > ym && !i.isNoticed)
+            .sort((a, b) => a.orderYm.localeCompare(b.orderYm))
+            .slice(0, 5)
+    }, [preSpecItems])
 
     // 연간 통계 (원본 데이터만)
     const stats = useMemo(() => {
@@ -463,6 +482,34 @@ function App() {
                                                     <Calendar size={22} className="text-blue-500" /> 다음 예정 입찰 정보
                                                 </h3>
                                                 <div className="space-y-5">
+                                                    {/* 확정 레이어 — 발주계획에 등록된 미래 발주 건 */}
+                                                    {confirmedUpcoming.map((plan) => (
+                                                        <div
+                                                            key={`plan-${plan.id}`}
+                                                            onClick={() => setActiveTab('pre-spec')}
+                                                            className="group relative pl-6 border-l-2 border-violet-200 hover:border-violet-500 transition-colors py-1 cursor-pointer"
+                                                        >
+                                                            <div className="absolute -left-[5px] top-2 w-2 h-2 rounded-full bg-violet-400 group-hover:bg-violet-600 transition-colors" />
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{plan.orderYm}</p>
+                                                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-violet-50 text-violet-600">확정</span>
+                                                                {plan.amount > 0 && (
+                                                                    <span className="text-[9px] font-black text-violet-500">{formatAmount(plan.amount)}</span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[13px] font-bold line-clamp-2 mt-0.5 leading-snug text-slate-700 group-hover:text-violet-700 transition-colors">
+                                                                {plan.title}
+                                                            </p>
+                                                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                                                                {[plan.institution, plan.department, plan.officerTel].filter(Boolean).join(' · ')}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+
+                                                    {confirmedUpcoming.length > 0 && upcomingBids.length > 0 && (
+                                                        <div className="border-t border-dashed border-slate-200 pt-1" />
+                                                    )}
+
                                                     {upcomingBids.slice(0, 7).map((bid) => (
                                                         <div
                                                             key={bid.bid_id}
@@ -476,6 +523,15 @@ function App() {
                                                                     <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${bid.is_prediction ? 'bg-rose-50 text-rose-500' : 'bg-blue-50 text-blue-500'}`}>
                                                                         {bid.is_prediction ? `${bid.prediction_count}차 Pred` : 'Actual'}
                                                                     </span>
+                                                                    {/* 예측 근거 표기. 이력 유도값은 수동입력보다 신뢰도가 낮다. */}
+                                                                    {bid.is_prediction && bid._durationSource === 'derived' && (
+                                                                        <span
+                                                                            className="text-[8px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-400"
+                                                                            title={`과거 공고 간격에서 ${bid._effectiveDuration}개월 주기로 추정`}
+                                                                        >
+                                                                            추정주기
+                                                                        </span>
+                                                                    )}
                                                                     {bid['계약 기간 내'] > 0 && (
                                                                         <span className="text-[9px] font-black text-blue-500">{formatAmount(bid['계약 기간 내'])}</span>
                                                                     )}
