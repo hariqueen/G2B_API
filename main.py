@@ -334,6 +334,14 @@ def main():
         print(f"❌ AX Firestore 수집 중 오류: {e}")
         keyword_results["AX"] = 0
 
+    # ── 사전규격 / 발주계획 Firestore 수집 ────────────────
+    prespec_result = {"pre_spec_count": 0, "order_plan_count": 0, "imminent": []}
+    try:
+        from prespec_collector import collect_prespec_data
+        prespec_result = collect_prespec_data(keywords)
+    except Exception as e:
+        print(f"❌ 사전규격/발주계획 수집 중 오류: {e}")
+
     # 🎉 최종 결과 출력
     print(f"\n{'='*50}")
     print("🎉 전체 키워드 수집 완료!")
@@ -371,6 +379,11 @@ def main():
             "filtered_records": ax_result.get("filtered_records", 0),
         },
         "ax_bid_details": ax_result.get("bid_details", []),
+        "prespec_result": {
+            "pre_spec_count": prespec_result.get("pre_spec_count", 0),
+            "order_plan_count": prespec_result.get("order_plan_count", 0),
+        },
+        "imminent_opinions": prespec_result.get("imminent", []),
     }
 
     # G2B_API 폴더에 저장 (GitHub Actions 이메일 알림용)

@@ -97,6 +97,26 @@ jobs:
               echo "$AX_BID_LIST"
               echo 'EOF'
             } >> $GITHUB_OUTPUT
+
+            # 사전규격 / 발주계획 수집 결과
+            PRESPEC_COUNT="$(jq -r '.prespec_result.pre_spec_count // 0' collection_result.json 2>/dev/null || echo 0)"
+            ORDERPLAN_COUNT="$(jq -r '.prespec_result.order_plan_count // 0' collection_result.json 2>/dev/null || echo 0)"
+            echo "PRESPEC_COUNT=$PRESPEC_COUNT" >> $GITHUB_OUTPUT
+            echo "ORDERPLAN_COUNT=$ORDERPLAN_COUNT" >> $GITHUB_OUTPUT
+
+            # 의견등록 마감 임박(D-3 이내). 의견 창이 중앙값 5일로 짧아 놓치면 기회가 사라진다.
+            IMMINENT="$(jq -r '
+              if ((.imminent_opinions // []) | length) == 0 then
+                "  (해당 없음)"
+              else
+                (.imminent_opinions[] |
+                  "• [D-\(.dday)] \(.title) (\(.amountEok)억)\n    발주: \(.institution) / 마감: \(.deadline)\n    규격서: \(.docUrl)")
+              end' collection_result.json 2>/dev/null || echo "  (조회 실패)")"
+            {
+              echo 'IMMINENT<<EOF'
+              echo "$IMMINENT"
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
           else
             echo "TOTAL_COUNT=0" >> $GITHUB_OUTPUT
             echo "COLLECTION_DATE=$(date)" >> $GITHUB_OUTPUT
@@ -105,6 +125,9 @@ jobs:
             echo "AX_UPSERTED=0" >> $GITHUB_OUTPUT
             echo "AX_TOTAL=0" >> $GITHUB_OUTPUT
             echo "AX_BID_LIST=결과 파일을 찾을 수 없습니다." >> $GITHUB_OUTPUT
+            echo "PRESPEC_COUNT=0" >> $GITHUB_OUTPUT
+            echo "ORDERPLAN_COUNT=0" >> $GITHUB_OUTPUT
+            echo "IMMINENT=  (결과 파일 없음)" >> $GITHUB_OUTPUT
           fi
 
       # 알림 수신자 목록을 RTDB(/notification_emails)에서 읽어옴 (대시보드 '설정' 탭에서 관리)
@@ -169,6 +192,20 @@ jobs:
             AX 수집된 공고 목록:
             ${{ steps.read_results.outputs.AX_BID_LIST }}
             
+            ═══════════════════════════════════
+            📐 사전규격 / 발주계획 수집 결과
+            ═══════════════════════════════════
+            • 사전규격: ${{ steps.read_results.outputs.PRESPEC_COUNT }}건
+            • 발주계획: ${{ steps.read_results.outputs.ORDERPLAN_COUNT }}건
+
+            ═══════════════════════════════════
+            ⏰ 의견등록 마감 임박 (D-3 이내)
+            ═══════════════════════════════════
+            ${{ steps.read_results.outputs.IMMINENT }}
+
+            ※ 의견등록은 발주 규격을 바꿀 수 있는 유일한 창구이며
+               평균 5일만 열립니다.
+
             ═══════════════════════════════════
             🔗 대시보드 확인
             ═══════════════════════════════════
