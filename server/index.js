@@ -28,10 +28,11 @@ try {
 /**
  * 컬렉션 전체 조회 결과를 메모리에 캐시한다.
  *
- * 각 라우트가 컬렉션을 통째로 읽기 때문에 캐시가 없으면 요청 1건당
- * 문서 수만큼 read 가 발생한다(사전규격+발주계획 1,387건). 프론트에서
- * 두 컴포넌트가 각각 호출하면 페이지 1회 열 때 2,700 read 를 넘겨
- * Firestore 무료 한도(일 50,000 read)를 금방 소진한다. 실제로 소진시킨 적 있다.
+ * 라우트가 컬렉션을 통째로 읽기 때문에 캐시가 없으면 요청 1건당 문서 수만큼
+ * read 가 발생해 Firestore 무료 한도(일 50,000 read)를 소진시킨다. 실제로 겪었다.
+ *
+ * 사전규격/발주계획은 이 문제로 RTDB 로 옮겨 클라이언트가 직접 읽는다.
+ * 여기 남은 것은 AX 입찰공고(bid_pblanc_list)뿐이다.
  *
  * 데이터는 수집 배치(GitHub Actions)가 하루 1회 갱신하므로 TTL 을 길게 잡는다.
  *
@@ -114,31 +115,6 @@ app.get('/api/firestore/bids', async (req, res) => {
         res.json(sorted);
     } catch (error) {
         console.error('[Server] Error fetching Firestore bids:', error.message);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// API: 사전규격 + 발주계획 통합 조회
-// 두 소스를 _source 로 구분해 한 배열로 반환한다. 617건 규모라 전량 조회 후
-// 클라이언트에서 필터링한다 (Firestore 복합색인 불필요).
-app.get('/api/firestore/pre-specs', async (req, res) => {
-    if (!firestore) {
-        return res.json([]);
-    }
-
-    try {
-        const [specs, plans] = await Promise.all([
-            readCollection('pre_spec_list', d => ({ ...d, _source: 'pre_spec' })),
-            readCollection('order_plan_list', d => ({ ...d, _source: 'order_plan' }))
-        ]);
-
-        // 사전규격은 접수일시(rcptDt), 발주계획은 게시일시(nticeDt) 기준 최신순
-        const rows = [...specs, ...plans].sort((a, b) =>
-            String(b.rcptDt || b.nticeDt || '').localeCompare(String(a.rcptDt || a.nticeDt || '')));
-
-        res.json(rows);
-    } catch (error) {
-        console.error('[Server] Error fetching pre-specs:', error.message);
         res.status(500).json({ error: error.message });
     }
 });

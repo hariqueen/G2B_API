@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { db, ref, onValue } from '../api/firebase';
 import { PreSpecItem, PreSpecDomain } from '../types';
 
 /** 배너에 "마감 임박"으로 띄울 기준(일). 메일 알림은 별도로 D-3을 쓴다. */
@@ -79,29 +80,19 @@ const toItem = (doc: any): PreSpecItem => {
 };
 
 /**
- * 응답을 모듈 레벨에서 공유한다.
+ * RTDB 를 클라이언트에서 직접 읽는다. 서버 라우트를 거치지 않는다.
  *
- * 이 훅을 App(지표 카드)과 PreSpecFinder(목록)가 각각 호출하기 때문에
- * 캐시가 없으면 페이지 1회 열 때 같은 엔드포인트를 2번 때린다.
- * 서버가 컬렉션 전체를 읽는 구조라 그대로 Firestore read 로 이어진다.
+ * 전에는 Firestore 를 서버 경유로 읽었는데, 문서 읽기 건수 과금이라
+ * 1,387건 컬렉션을 훑을 때마다 그만큼 read 가 나가 무료 한도를 소진시켰다.
+ * RTDB 는 전송량 과금이고 전체가 2MB 수준이라 이 구조가 성립한다.
+ * useBids 와 같은 방식이다.
  */
-let sharedPromise: Promise<PreSpecItem[]> | null = null;
+const SPEC_PATH = '/pre_specs';
+const PLAN_PATH = '/order_plans';
 
-const loadPreSpecs = () => {
-    if (!sharedPromise) {
-        sharedPromise = fetch('/api/firestore/pre-specs')
-            .then(res => {
-                if (!res.ok) throw new Error(`API error: ${res.status}`);
-                return res.json();
-            })
-            .then((data: any[]) => data.map(toItem))
-            .catch(err => {
-                sharedPromise = null;   // 실패는 캐시하지 않는다
-                throw err;
-            });
-    }
-    return sharedPromise;
-};
+const toRows = (node: any, source: 'pre_spec' | 'order_plan'): PreSpecItem[] =>
+    Object.entries(node || {}).map(([id, v]: [string, any]) =>
+        toItem({ ...v, id, _source: source }));
 
 export const usePreSpecs = (domain?: PreSpecDomain) => {
     const [all, setAll] = useState<PreSpecItem[]>([]);
@@ -109,15 +100,36 @@ export const usePreSpecs = (domain?: PreSpecDomain) => {
     const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
-        let alive = true;
-        loadPreSpecs()
-            .then(rows => { if (alive) setAll(rows); })
-            .catch(err => {
-                console.error('Error fetching pre-specs:', err);
-                if (alive) setError(err as Error);
-            })
-            .finally(() => { if (alive) setLoading(false); });
-        return () => { alive = false; };
+        let specs: PreSpecItem[] = [];
+        let plans: PreSpecItem[] = [];
+        let specLoaded = false;
+        let planLoaded = false;
+
+        const publish = () => {
+            setAll([...specs, ...plans].sort((a, b) =>
+                String(b.postedAt).localeCompare(String(a.postedAt))));
+            if (specLoaded && planLoaded) setLoading(false);
+        };
+
+        const onErr = (err: Error) => {
+            console.error('Error reading pre-specs from RTDB:', err);
+            setError(err);
+            setLoading(false);
+        };
+
+        const offSpec = onValue(ref(db, SPEC_PATH), snap => {
+            specs = toRows(snap.val(), 'pre_spec');
+            specLoaded = true;
+            publish();
+        }, onErr);
+
+        const offPlan = onValue(ref(db, PLAN_PATH), snap => {
+            plans = toRows(snap.val(), 'order_plan');
+            planLoaded = true;
+            publish();
+        }, onErr);
+
+        return () => { offSpec(); offPlan(); };
     }, []);
 
     // 도메인이 지정되면 해당 도메인 건만 본다.
