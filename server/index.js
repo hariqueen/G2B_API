@@ -49,6 +49,36 @@ app.get('/api/firestore/bids', async (req, res) => {
     }
 });
 
+// API: 사전규격 + 발주계획 통합 조회
+// 두 소스를 _source 로 구분해 한 배열로 반환한다. 617건 규모라 전량 조회 후
+// 클라이언트에서 필터링한다 (Firestore 복합색인 불필요).
+app.get('/api/firestore/pre-specs', async (req, res) => {
+    if (!firestore) {
+        return res.json([]);
+    }
+
+    try {
+        const [specSnap, planSnap] = await Promise.all([
+            firestore.collection('pre_spec_list').get(),
+            firestore.collection('order_plan_list').get()
+        ]);
+
+        const rows = [];
+        specSnap.forEach(doc => rows.push({ id: doc.id, _source: 'pre_spec', ...doc.data() }));
+        planSnap.forEach(doc => rows.push({ id: doc.id, _source: 'order_plan', ...doc.data() }));
+
+        // 사전규격은 접수일시(rcptDt), 발주계획은 게시일시(nticeDt) 기준 최신순
+        rows.sort((a, b) => String(b.rcptDt || b.nticeDt || '')
+            .localeCompare(String(a.rcptDt || a.nticeDt || '')));
+
+        console.log(`[Server] Fetched ${specSnap.size} pre-specs + ${planSnap.size} order-plans`);
+        res.json(rows);
+    } catch (error) {
+        console.error('[Server] Error fetching pre-specs:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', firestore: !!firestore });
