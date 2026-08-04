@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { PreSpecItem } from '../types';
 
+/** 배너에 "마감 임박"으로 띄울 기준(일). 메일 알림은 별도로 D-3을 쓴다. */
+export const IMMINENT_DAYS = 7;
+
 const num = (v: any) => {
     const n = parseInt(String(v ?? '').replace(/[^0-9]/g, ''), 10);
     return isNaN(n) ? 0 : n;
@@ -96,10 +99,15 @@ export const usePreSpecs = () => {
         run();
     }, []);
 
-    // 의견등록 진행중 = 마감일이 오늘 이후인 사전규격
+    // 의견등록이 아직 열려 있는 건 (마감일 >= 오늘)
     const openOpinions = items
         .filter(i => i.source === 'pre_spec' && i.dday !== null && i.dday >= 0)
         .sort((a, b) => (a.dday ?? 0) - (b.dday ?? 0));
 
-    return { items, openOpinions, loading, error };
+    // 마감 임박 = 열려 있는 것 중 IMMINENT_DAYS 이내.
+    // 메일 알림은 D-3(매일 오는 푸시라 더 좁게), 배너는 D-7로 둔다.
+    // 의견 창이 중앙값 5일이라 D-3만 보면 초반 절반을 놓친다.
+    const imminentOpinions = openOpinions.filter(i => (i.dday ?? 99) <= IMMINENT_DAYS);
+
+    return { items, openOpinions, imminentOpinions, loading, error };
 };

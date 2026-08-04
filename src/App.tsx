@@ -50,9 +50,9 @@ import SettingsPanel from './components/SettingsPanel'
 
 function App() {
     const { bids, loading } = useBids()
-    // 사이드바 '사전규격' 뱃지용. 의견등록이 열려 있는 건은 상시 3~4건 수준이다.
-    const { items: preSpecItems, openOpinions } = usePreSpecs()
-    const openOpinionCount = openOpinions.length
+    // 사이드바 '사전규격' 뱃지. 배너와 같은 기준(마감 임박)으로 맞춘다.
+    const { items: preSpecItems, imminentOpinions } = usePreSpecs()
+    const openOpinionCount = imminentOpinions.length
 
     // 입찰공고번호 → 사전규격 역인덱스. 공고 상세에서 "사전규격 있었음"을 띄운다.
     // RTDB의 bid_id 가 순수 공고번호라 bidNtceNos 와 그대로 매칭된다.
@@ -715,9 +715,19 @@ function App() {
                             ) : (
                                 /* Full Data Table - Announcement List View */
                                 (() => {
-                                    const filteredBids = yearData.filter(b =>
-                                        !searchQuery || b.공고명.includes(searchQuery) || b.실수요기관.includes(searchQuery)
-                                    );
+                                    // 입찰일시 기준 최근순. 일시가 없거나 깨진 건은 예상 년월 1일로 본다.
+                                    const dateOf = (b: Bid) => {
+                                        const t = new Date(b.예상_입찰일).getTime()
+                                        if (!isNaN(t)) return t
+                                        const ym = b.예상_년월 || `${b.예상_연도}-${String(b.예상_입찰월).padStart(2, '0')}`
+                                        return new Date(`${ym}-01`).getTime() || 0
+                                    }
+
+                                    const filteredBids = yearData
+                                        .filter((b: Bid) =>
+                                            !searchQuery || b.공고명.includes(searchQuery) || b.실수요기관.includes(searchQuery)
+                                        )
+                                        .sort((a: Bid, b: Bid) => dateOf(b) - dateOf(a));
                                     return (
                                         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
                                             <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
