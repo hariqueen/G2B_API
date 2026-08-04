@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, ExternalLink, FileText, Phone, Search } from 'lucide-react';
 import { usePreSpecs } from '../hooks/usePreSpecs';
-import { PreSpecItem } from '../types';
+import { PreSpecItem, PreSpecDomain } from '../types';
 
 type StatusFilter = 'all' | 'open' | 'waiting' | 'noticed';
 
@@ -37,6 +37,8 @@ interface Props {
     resolveBid?: (bidNtceNo: string) => ResolvedBid | null;
     /** 진입 시 선택할 필터. 대시보드 카드에서 들어오면 '의견중'으로 연다. */
     initialStatus?: StatusFilter;
+    /** 어느 도메인 목록인지. 탭마다 다르다. */
+    domain: PreSpecDomain;
 }
 
 /**
@@ -47,8 +49,8 @@ const bidUrl = (no: string, ord: string, resolved: ResolvedBid | null) =>
     resolved?.url
     || `https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=${no}&bidPbancOrd=${ord || '000'}`;
 
-const PreSpecFinder = ({ resolveBid, initialStatus = 'all' }: Props) => {
-    const { items, loading, error } = usePreSpecs();
+const PreSpecFinder = ({ resolveBid, initialStatus = 'all', domain }: Props) => {
+    const { items, loading, error } = usePreSpecs(domain);
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<StatusFilter>(initialStatus);
     const [swOnly, setSwOnly] = useState(false);

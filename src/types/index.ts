@@ -30,6 +30,9 @@ export interface Bid {
     [key: string]: any; // Allow dynamic fields
 }
 
+/** 대시보드 도메인. 사이드바 최상위 구분과 같다. */
+export type PreSpecDomain = 'callcenter' | 'ax';
+
 // 사전규격 / 발주계획 통합 항목.
 // 두 API의 필드명이 달라 화면에서 쓰는 값만 정규화해 담는다.
 export interface PreSpecItem {
@@ -53,5 +56,7 @@ export interface PreSpecItem {
     bidRefs: { no: string; ord: string }[];
     specDocUrls: string[];      // 규격서 파일 URL (사전규격만)
     keywords: string[];         // 매칭된 검색 키워드
+    /** 소속 도메인. 한 건이 양쪽에 걸릴 수 있다(예: "상담센터 AX기반 ISP"). */
+    domains: PreSpecDomain[];
     raw: any;
 }

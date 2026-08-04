@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PreSpecItem } from '../types';
+import { PreSpecItem, PreSpecDomain } from '../types';
 
 /** 배너에 "마감 임박"으로 띄울 기준(일). 메일 알림은 별도로 D-3을 쓴다. */
 export const IMMINENT_DAYS = 7;
@@ -73,12 +73,13 @@ const toItem = (doc: any): PreSpecItem => {
         bidRefs: parseRefs(doc.bidNtceNoList),
         specDocUrls: doc.specDocUrls || [],
         keywords: doc._keywords || [],
+        domains: doc._domains || [],
         raw: doc
     };
 };
 
-export const usePreSpecs = () => {
-    const [items, setItems] = useState<PreSpecItem[]>([]);
+export const usePreSpecs = (domain?: PreSpecDomain) => {
+    const [all, setAll] = useState<PreSpecItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
@@ -88,7 +89,7 @@ export const usePreSpecs = () => {
                 const res = await fetch('/api/firestore/pre-specs');
                 if (!res.ok) throw new Error(`API error: ${res.status}`);
                 const data = await res.json();
-                setItems(data.map(toItem));
+                setAll(data.map(toItem));
             } catch (err) {
                 console.error('Error fetching pre-specs:', err);
                 setError(err as Error);
@@ -98,6 +99,10 @@ export const usePreSpecs = () => {
         };
         run();
     }, []);
+
+    // 도메인이 지정되면 해당 도메인 건만 본다.
+    // 콜센터/AX 양쪽에 걸치는 건이 있어 포함 여부로 판정한다.
+    const items = domain ? all.filter(i => i.domains.includes(domain)) : all;
 
     // 의견등록이 아직 열려 있는 건 (마감일 >= 오늘)
     const openOpinions = items

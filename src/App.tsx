@@ -51,8 +51,8 @@ import SettingsPanel from './components/SettingsPanel'
 
 function App() {
     const { bids, loading } = useBids()
-    // 사이드바 '사전규격' 뱃지. 배너와 같은 기준(마감 임박)으로 맞춘다.
-    const { items: preSpecItems, imminentOpinions } = usePreSpecs()
+    // 대시보드는 '콜센터 운영 위탁' 도메인이므로 지표 카드도 콜센터 건만 센다.
+    const { items: preSpecItems, imminentOpinions } = usePreSpecs('callcenter')
     const openOpinionCount = imminentOpinions.length
 
     // 입찰공고번호 → 사전규격 역인덱스. 공고 상세에서 "사전규격 있었음"을 띄운다.
@@ -77,6 +77,7 @@ function App() {
     // 공고 리스트 구분 필터. 실적이 기본값 — 예측은 추정치라 목록의 기준선은 실적이다.
     const [listKind, setListKind] = useState<'all' | 'actual' | 'pred'>('actual')
     const [listPage, setListPage] = useState(1)
+    const [listPageSize, setListPageSize] = useState(10)
 
     // 용역기간 편집 상태
     const [editingBid, setEditingBid] = useState<Bid | null>(null)
@@ -88,8 +89,8 @@ function App() {
         }
     }, [])
 
-    // 검색어·구분·연도가 바뀌면 목록이 달라지므로 1페이지로 되돌린다.
-    useEffect(() => { setListPage(1) }, [searchQuery, listKind, selectedYear])
+    // 검색어·구분·연도·페이지당 건수가 바뀌면 목록이 달라지므로 1페이지로 되돌린다.
+    useEffect(() => { setListPage(1) }, [searchQuery, listKind, selectedYear, listPageSize])
 
     const monthGroups = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]
     const currentMonths = monthGroups[monthPage]
@@ -341,7 +342,12 @@ function App() {
                     {/* Scrollable Area */}
                     {activeTab === 'pre-spec' || activeTab === 'ax-pre-spec' ? (
                         <div className="flex-1 overflow-hidden h-full">
-                            <PreSpecFinder key={preSpecFilter} resolveBid={resolveBid} initialStatus={preSpecFilter} />
+                            <PreSpecFinder
+                                key={`${activeTab}-${preSpecFilter}`}
+                                domain={activeTab === 'ax-pre-spec' ? 'ax' : 'callcenter'}
+                                resolveBid={resolveBid}
+                                initialStatus={preSpecFilter}
+                            />
                         </div>
                     ) : activeTab === 'ax-bpr-isp' ? (
                         <div className="flex-1 overflow-hidden h-full">
@@ -740,7 +746,7 @@ function App() {
 
                                     // 페이지네이션. 삭제·필터로 건수가 줄어 현재 페이지가 범위를 벗어나면
                                     // 빈 화면이 되므로 마지막 페이지로 당겨서 쓴다.
-                                    const PAGE_SIZE = 30
+                                    const PAGE_SIZE = 10
                                     const totalPages = Math.max(1, Math.ceil(filteredBids.length / PAGE_SIZE))
                                     const page = Math.min(Math.max(1, listPage), totalPages)
                                     const startIdx = (page - 1) * PAGE_SIZE
@@ -799,19 +805,19 @@ function App() {
                                                 <table className="w-full text-left border-collapse">
                                                     <thead className="bg-slate-50">
                                                         <tr>
-                                                            <th className="px-8 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">공고명 / 기관</th>
-                                                            <th className="px-6 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-right">사업금액</th>
-                                                            <th className="px-6 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">용역기간</th>
-                                                            <th className="px-6 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">낙찰업체</th>
-                                                            <th className="px-6 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-right">예상월</th>
-                                                            <th className="px-6 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">구분</th>
-                                                            <th className="px-6 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center"></th>
+                                                            <th className="px-8 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">공고명 / 기관</th>
+                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-right">사업금액</th>
+                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">용역기간</th>
+                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">낙찰업체</th>
+                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-right">예상월</th>
+                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">구분</th>
+                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center"></th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-50">
                                                         {pageBids.map((bid) => (
                                                             <tr key={bid.bid_id} className={`hover:bg-slate-50/80 transition-all ${bid.is_prediction ? 'bg-rose-50/30' : ''}`}>
-                                                                <td className="px-8 py-5">
+                                                                <td className="px-8 py-2.5">
                                                                     {bid.공고URL && !bid.is_prediction ? (
                                                                         <a
                                                                             href={bid.공고URL}
@@ -826,22 +832,22 @@ function App() {
                                                                     )}
                                                                     <p className="text-xs text-slate-400 mt-0.5">{bid.실수요기관}</p>
                                                                 </td>
-                                                                <td className="px-6 py-5 text-right font-bold text-sm text-slate-600 tabular-nums whitespace-nowrap">
+                                                                <td className="px-6 py-2.5 text-right font-bold text-sm text-slate-600 tabular-nums whitespace-nowrap">
                                                                     {bid['계약 기간 내'] > 0 ? formatAmount(bid['계약 기간 내']) : '-'}
                                                                 </td>
-                                                                <td className="px-6 py-5 text-center font-bold text-sm text-slate-600">
+                                                                <td className="px-6 py-2.5 text-center font-bold text-sm text-slate-600">
                                                                     {bid['용역기간(개월)'] > 0 ? `${bid['용역기간(개월)']}개월` : '-'}
                                                                 </td>
-                                                                <td className="px-6 py-5 text-center text-sm text-slate-600 max-w-[180px] truncate">
+                                                                <td className="px-6 py-2.5 text-center text-sm text-slate-600 max-w-[180px] truncate">
                                                                     {bid.입찰결과_1순위 || '-'}
                                                                 </td>
-                                                                <td className="px-6 py-5 text-right font-bold text-sm text-slate-600 tabular-nums">{bid.예상_입찰월}월</td>
-                                                                <td className="px-6 py-5 text-center">
+                                                                <td className="px-6 py-2.5 text-right font-bold text-sm text-slate-600 tabular-nums">{bid.예상_입찰월}월</td>
+                                                                <td className="px-6 py-2.5 text-center">
                                                                     <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${bid.is_prediction ? 'bg-rose-50 text-rose-500' : 'bg-blue-50 text-blue-500'}`}>
                                                                         {bid.is_prediction ? `${bid.prediction_count}차 Pred` : 'Actual'}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-6 py-5 text-center">
+                                                                <td className="px-6 py-2.5 text-center">
                                                                     {!bid.is_prediction && (
                                                                         <div className="inline-flex items-center gap-1.5">
                                                                             <button
@@ -866,6 +872,57 @@ function App() {
                                                     </tbody>
                                                 </table>
                                             </div>
+
+                                            {filteredBids.length > 0 && (
+                                                <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center gap-4">
+                                                    <p className="flex-1 text-xs font-bold text-slate-400 tabular-nums">
+                                                        총 {filteredBids.length}건 중 {startIdx + 1}–{startIdx + pageBids.length}
+                                                    </p>
+
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={() => goPage(page - 1)}
+                                                            disabled={page === 1}
+                                                            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                                            title="이전 페이지"
+                                                        >
+                                                            <ChevronLeft size={14} />
+                                                        </button>
+
+                                                        {winStart > 1 && (
+                                                            <span className="px-1 text-xs font-bold text-slate-300">…</span>
+                                                        )}
+
+                                                        {pageNums.map(p => (
+                                                            <button
+                                                                key={p}
+                                                                onClick={() => goPage(p)}
+                                                                className={`min-w-[34px] px-2 py-2 rounded-xl text-xs font-bold tabular-nums transition-all ${p === page
+                                                                    ? 'bg-blue-600 text-white shadow-sm'
+                                                                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-700'}`}
+                                                            >
+                                                                {p}
+                                                            </button>
+                                                        ))}
+
+                                                        {winStart + pageNums.length - 1 < totalPages && (
+                                                            <span className="px-1 text-xs font-bold text-slate-300">…</span>
+                                                        )}
+
+                                                        <button
+                                                            onClick={() => goPage(page + 1)}
+                                                            disabled={page === totalPages}
+                                                            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                                            title="다음 페이지"
+                                                        >
+                                                            <ChevronRight size={14} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* 좌측 건수 텍스트와 폭을 맞춰 네비게이션을 가운데에 둔다 */}
+                                                    <div className="flex-1" />
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })()
