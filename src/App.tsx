@@ -6,7 +6,6 @@ import {
     Calendar,
     ChevronRight,
     ChevronLeft,
-    Search,
     Edit2,
     X,
     Save,
@@ -48,6 +47,10 @@ import PreSpecFinder from './components/PreSpecFinder'
 import { usePreSpecs } from './hooks/usePreSpecs'
 import CollectionStatusModal, { shouldShowCollectionModal } from './components/CollectionStatusModal'
 import SettingsPanel from './components/SettingsPanel'
+import {
+    CARD, THEAD, TBODY, TR, TD, TD_FIRST, TH_C, TH_R, TH_FIRST,
+    badge, iconLink, FilterSelect, SearchBox, PageSizeSelect, Pagination
+} from './components/ui/table'
 
 function App() {
     const { bids, loading } = useBids()
@@ -248,7 +251,7 @@ function App() {
                                         className={`w-full flex items-center gap-3 px-5 py-3 rounded-xl font-bold transition-all ${activeTab === 'list' ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
                                     >
                                         <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'list' ? 'bg-blue-400' : 'bg-slate-600'}`} />
-                                        <span className="text-xs">공고 리스트</span>
+                                        <span className="text-xs">입찰공고 리스트</span>
                                     </button>
                                     <button
                                         onClick={() => { setPreSpecFilter('all'); setActiveTab('pre-spec') }}
@@ -559,7 +562,7 @@ function App() {
                                                 </div>
                                             </div>
                                             <button onClick={() => setActiveTab('list')} className="w-full mt-8 py-4 bg-slate-50 text-slate-600 text-[12px] font-bold rounded-[20px] hover:bg-blue-600 hover:text-white transition-all border border-slate-100 flex items-center justify-center gap-2 group">
-                                                전체 공고 리스트 보기 <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                                                전체 입찰공고 리스트 보기 <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                                             </button>
                                         </div>
                                     </div>
@@ -731,8 +734,8 @@ function App() {
                                         !searchQuery || b.공고명.includes(searchQuery) || b.실수요기관.includes(searchQuery)
                                     )
 
-                                    // 구분 탭 건수는 검색 결과 기준 — 탭을 눌러보지 않아도 몇 건인지 보이게 한다.
-                                    const kindTabs: { key: typeof listKind; label: string; n: number }[] = [
+                                    // 건수는 검색 결과 기준 — 골라보지 않아도 몇 건인지 보이게 한다.
+                                    const kindOpts: { key: typeof listKind; label: string; n: number }[] = [
                                         { key: 'all', label: '전체', n: searched.length },
                                         { key: 'actual', label: 'Actual', n: searched.filter(b => !b.is_prediction).length },
                                         { key: 'pred', label: 'Pred', n: searched.filter(b => b.is_prediction).length }
@@ -751,13 +754,6 @@ function App() {
                                     const startIdx = (page - 1) * listPageSize
                                     const pageBids = filteredBids.slice(startIdx, startIdx + listPageSize)
 
-                                    // 페이지 번호는 현재 페이지 기준 최대 5개 창으로 보여준다.
-                                    const winStart = Math.max(1, Math.min(page - 2, totalPages - 4))
-                                    const pageNums = Array.from(
-                                        { length: Math.min(5, totalPages) },
-                                        (_, i) => winStart + i
-                                    )
-
                                     // 페이지를 넘길 때마다 목록 머리로 올려준다 — 스크롤 위치가 남으면
                                     // 새 페이지 중간부터 보이게 된다.
                                     const goPage = (p: number) => {
@@ -765,111 +761,81 @@ function App() {
                                         document.getElementById('bid-list-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                                     }
                                     return (
-                                        <div id="bid-list-top" className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm scroll-mt-6">
-                                            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                                                <div className="flex items-center gap-3">
-                                                    <h3 className="font-bold text-lg">전체 입찰 공고 목록</h3>
-                                                    <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-bold">
+                                        <div id="bid-list-top" className={`${CARD} scroll-mt-6`}>
+                                            <div className="px-6 sm:px-7 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                                                <div className="flex items-baseline gap-2.5">
+                                                    <h3 className="font-bold text-[15px] text-slate-800 tracking-tight whitespace-nowrap">전체 입찰 공고</h3>
+                                                    <span className="text-xs font-bold text-slate-400 tabular-nums whitespace-nowrap">
                                                         {filteredBids.length}건
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="flex items-center gap-1">
-                                                        {kindTabs.map(t => (
-                                                            <button
-                                                                key={t.key}
-                                                                onClick={() => setListKind(t.key)}
-                                                                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${listKind === t.key
-                                                                    ? 'bg-blue-600 text-white shadow-sm'
-                                                                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-700'}`}
-                                                            >
-                                                                {t.label} <span className="opacity-70">{t.n}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-
-                                                    <div className="flex items-center gap-4 bg-white border border-slate-200 px-4 py-2 rounded-xl w-72">
-                                                        <Search size={16} className="text-slate-400" />
-                                                        <input
-                                                            type="text"
-                                                            placeholder="공고명, 기관명 검색..."
-                                                            value={searchQuery}
-                                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                                            className="bg-transparent border-none outline-none text-xs w-full"
-                                                        />
-                                                    </div>
-
-                                                    <select
-                                                        value={listPageSize}
-                                                        onChange={(e) => setListPageSize(Number(e.target.value))}
-                                                        className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 outline-none cursor-pointer hover:text-slate-700"
-                                                        title="페이지당 표시 건수"
-                                                    >
-                                                        {[10, 30, 50, 100].map(n => (
-                                                            <option key={n} value={n}>{n}개씩</option>
-                                                        ))}
-                                                    </select>
+                                                <div className="flex flex-wrap items-center gap-2.5">
+                                                    <FilterSelect label="구분" value={listKind} onChange={setListKind} options={kindOpts} />
+                                                    <SearchBox value={searchQuery} onChange={setSearchQuery} placeholder="공고명, 기관명 검색..." />
+                                                    <PageSizeSelect value={listPageSize} onChange={setListPageSize} />
                                                 </div>
                                             </div>
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-left border-collapse">
-                                                    <thead className="bg-slate-50">
+                                                    <thead className={THEAD}>
                                                         <tr>
-                                                            <th className="px-8 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">공고명 / 기관</th>
-                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-right">사업금액</th>
-                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">용역기간</th>
-                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">낙찰업체</th>
-                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-right">예상월</th>
-                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">구분</th>
-                                                            <th className="px-6 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center"></th>
+                                                            <th className={TH_FIRST}>공고명 / 기관</th>
+                                                            <th className={TH_R}>사업금액</th>
+                                                            <th className={TH_C}>용역기간</th>
+                                                            <th className={TH_C}>낙찰업체</th>
+                                                            <th className={TH_R}>예상월</th>
+                                                            <th className={TH_C}>구분</th>
+                                                            <th className={TH_C}></th>
                                                         </tr>
                                                     </thead>
-                                                    <tbody className="divide-y divide-slate-50">
+                                                    <tbody className={TBODY}>
                                                         {pageBids.map((bid) => (
-                                                            <tr key={bid.bid_id} className={`hover:bg-slate-50/80 transition-all ${bid.is_prediction ? 'bg-rose-50/30' : ''}`}>
-                                                                <td className="px-8 py-2.5">
+                                                            <tr key={bid.bid_id} className={`${TR} ${bid.is_prediction ? 'bg-rose-50/25' : ''}`}>
+                                                                <td className={`${TD_FIRST} max-w-[420px]`}>
                                                                     {bid.공고URL && !bid.is_prediction ? (
                                                                         <a
                                                                             href={bid.공고URL}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
-                                                                            className={`font-bold text-sm line-clamp-1 hover:underline hover:text-blue-600 transition-colors ${bid.is_prediction ? 'text-rose-600' : 'text-slate-700'}`}
+                                                                            title={bid.공고명}
+                                                                            className="font-bold text-sm text-slate-700 line-clamp-1 hover:text-blue-600 hover:underline decoration-blue-300 underline-offset-2 transition-colors"
                                                                         >
                                                                             {bid.공고명}
                                                                         </a>
                                                                     ) : (
-                                                                        <p className={`font-bold text-sm line-clamp-1 ${bid.is_prediction ? 'text-rose-600' : 'text-slate-700'}`}>{bid.공고명}</p>
+                                                                        <p title={bid.공고명} className={`font-bold text-sm line-clamp-1 ${bid.is_prediction ? 'text-rose-600' : 'text-slate-700'}`}>{bid.공고명}</p>
                                                                     )}
-                                                                    <p className="text-xs text-slate-400 mt-0.5">{bid.실수요기관}</p>
+                                                                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{bid.실수요기관}</p>
                                                                 </td>
-                                                                <td className="px-6 py-2.5 text-right font-bold text-sm text-slate-600 tabular-nums whitespace-nowrap">
+                                                                <td className={`${TD} text-right font-bold text-sm text-slate-600 tabular-nums whitespace-nowrap`}>
                                                                     {bid['계약 기간 내'] > 0 ? formatAmount(bid['계약 기간 내']) : '-'}
                                                                 </td>
-                                                                <td className="px-6 py-2.5 text-center font-bold text-sm text-slate-600">
+                                                                <td className={`${TD} text-center text-sm text-slate-500 tabular-nums whitespace-nowrap`}>
                                                                     {bid['용역기간(개월)'] > 0 ? `${bid['용역기간(개월)']}개월` : '-'}
                                                                 </td>
-                                                                <td className="px-6 py-2.5 text-center text-sm text-slate-600 max-w-[180px] truncate">
+                                                                <td className={`${TD} text-center text-sm text-slate-500 max-w-[180px] truncate`}>
                                                                     {bid.입찰결과_1순위 || '-'}
                                                                 </td>
-                                                                <td className="px-6 py-2.5 text-right font-bold text-sm text-slate-600 tabular-nums">{bid.예상_입찰월}월</td>
-                                                                <td className="px-6 py-2.5 text-center">
-                                                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${bid.is_prediction ? 'bg-rose-50 text-rose-500' : 'bg-blue-50 text-blue-500'}`}>
+                                                                <td className={`${TD} text-right font-bold text-sm text-slate-600 tabular-nums whitespace-nowrap`}>{bid.예상_입찰월}월</td>
+                                                                <td className={`${TD} text-center`}>
+                                                                    <span className={badge(bid.is_prediction ? 'rose' : 'blue')}>
                                                                         {bid.is_prediction ? `${bid.prediction_count}차 Pred` : 'Actual'}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-6 py-2.5 text-center">
+                                                                <td className={`${TD} text-center`}>
                                                                     {!bid.is_prediction && (
-                                                                        <div className="inline-flex items-center gap-1.5">
+                                                                        // 행에 커서를 올렸을 때만 드러낸다 — 늘 떠 있으면 표가 버튼밭이 된다
+                                                                        <div className="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); handleEdit(bid); }}
-                                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-all border border-slate-100"
+                                                                                className={iconLink('slate')}
                                                                                 title="용역기간 수정"
                                                                             >
                                                                                 <Edit2 size={12} />
                                                                             </button>
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); handleDelete(bid); }}
-                                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-bold rounded-xl hover:bg-rose-600 hover:text-white transition-all border border-slate-100"
+                                                                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg ring-1 bg-slate-50 text-slate-400 ring-slate-900/[0.06] hover:bg-rose-600 hover:text-white hover:ring-rose-600 transition-all"
                                                                                 title="공고 삭제(목록에서 영구 제외)"
                                                                             >
                                                                                 <Trash2 size={12} />
@@ -884,54 +850,13 @@ function App() {
                                             </div>
 
                                             {filteredBids.length > 0 && (
-                                                <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center gap-4">
-                                                    <p className="flex-1 text-xs font-bold text-slate-400 tabular-nums">
-                                                        총 {filteredBids.length}건 중 {startIdx + 1}–{startIdx + pageBids.length}
-                                                    </p>
-
-                                                    <div className="flex items-center gap-1">
-                                                        <button
-                                                            onClick={() => goPage(page - 1)}
-                                                            disabled={page === 1}
-                                                            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                                            title="이전 페이지"
-                                                        >
-                                                            <ChevronLeft size={14} />
-                                                        </button>
-
-                                                        {winStart > 1 && (
-                                                            <span className="px-1 text-xs font-bold text-slate-300">…</span>
-                                                        )}
-
-                                                        {pageNums.map(p => (
-                                                            <button
-                                                                key={p}
-                                                                onClick={() => goPage(p)}
-                                                                className={`min-w-[34px] px-2 py-2 rounded-xl text-xs font-bold tabular-nums transition-all ${p === page
-                                                                    ? 'bg-blue-600 text-white shadow-sm'
-                                                                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-700'}`}
-                                                            >
-                                                                {p}
-                                                            </button>
-                                                        ))}
-
-                                                        {winStart + pageNums.length - 1 < totalPages && (
-                                                            <span className="px-1 text-xs font-bold text-slate-300">…</span>
-                                                        )}
-
-                                                        <button
-                                                            onClick={() => goPage(page + 1)}
-                                                            disabled={page === totalPages}
-                                                            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                                            title="다음 페이지"
-                                                        >
-                                                            <ChevronRight size={14} />
-                                                        </button>
-                                                    </div>
-
-                                                    {/* 좌측 건수 텍스트와 폭을 맞춰 네비게이션을 가운데에 둔다 */}
-                                                    <div className="flex-1" />
-                                                </div>
+                                                <Pagination
+                                                    total={filteredBids.length}
+                                                    page={page}
+                                                    pageSize={listPageSize}
+                                                    totalPages={totalPages}
+                                                    onPage={goPage}
+                                                />
                                             )}
                                         </div>
                                     );

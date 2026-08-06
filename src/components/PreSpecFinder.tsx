@@ -1,9 +1,14 @@
-import { useMemo, useState } from 'react';
-import { AlertCircle, ExternalLink, FileText, Phone, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, ExternalLink, FileText } from 'lucide-react';
 import { usePreSpecs } from '../hooks/usePreSpecs';
 import { PreSpecItem, PreSpecDomain } from '../types';
+import {
+    CARD, THEAD, TBODY, TR, TD, TD_FIRST, TH, TH_C, TH_R, TH_FIRST,
+    badge, iconLink, FilterSelect, SearchBox, PageSizeSelect, Pagination
+} from './ui/table';
 
 type StatusFilter = 'all' | 'open' | 'waiting' | 'noticed';
+type SourceFilter = 'all' | 'pre_spec' | 'order_plan';
 
 const formatMoney = (amount: number) => {
     if (!amount || isNaN(amount)) return '-';
@@ -19,11 +24,11 @@ const formatMoney = (amount: number) => {
 
 const ddayBadge = (dday: number | null) => {
     if (dday === null) return null;
-    if (dday < 0) return { text: '마감', cls: 'bg-slate-100 text-slate-400' };
-    if (dday === 0) return { text: 'D-DAY', cls: 'bg-red-600 text-white' };
-    if (dday <= 3) return { text: `D-${dday}`, cls: 'bg-red-100 text-red-700' };
-    if (dday <= 7) return { text: `D-${dday}`, cls: 'bg-amber-100 text-amber-700' };
-    return { text: `D-${dday}`, cls: 'bg-slate-100 text-slate-500' };
+    if (dday < 0) return { text: '마감', tone: 'slate' as const };
+    if (dday === 0) return { text: 'D-DAY', tone: 'red' as const };
+    if (dday <= 3) return { text: `D-${dday}`, tone: 'rose' as const };
+    if (dday <= 7) return { text: `D-${dday}`, tone: 'amber' as const };
+    return { text: `D-${dday}`, tone: 'slate' as const };
 };
 
 /** 대시보드가 보유한 공고 정보. 없으면 null. */
@@ -53,31 +58,75 @@ const PreSpecFinder = ({ resolveBid, initialStatus = 'all', domain }: Props) => 
     const { items, loading, error } = usePreSpecs(domain);
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<StatusFilter>(initialStatus);
+    const [source, setSource] = useState<SourceFilter>('all');
     const [swOnly, setSwOnly] = useState(false);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
-    const filtered = useMemo(() => {
-        return items.filter(i => {
-            if (query && !i.title.toLowerCase().includes(query.toLowerCase())
-                && !i.institution.toLowerCase().includes(query.toLowerCase())) return false;
-            if (swOnly && !i.isSwBiz) return false;
+    // 필터가 바뀌면 건수가 줄어 현재 페이지가 범위를 벗어날 수 있다.
+    useEffect(() => { setPage(1); }, [query, status, source, swOnly, pageSize]);
 
-            if (status === 'open') return i.dday !== null && i.dday >= 0;
-            if (status === 'waiting') return !i.isNoticed;
-            if (status === 'noticed') return i.isNoticed;
-            return true;
-        }).sort((a, b) => {
+    const matchStatus = (i: PreSpecItem, s: StatusFilter) => {
+        if (s === 'open') return i.dday !== null && i.dday >= 0;
+        if (s === 'waiting') return !i.isNoticed;
+        if (s === 'noticed') return i.isNoticed;
+        return true;
+    };
+    const matchSource = (i: PreSpecItem, s: SourceFilter) => s === 'all' || i.source === s;
+
+    // 검색어·SW 는 두 드롭다운 모두에 걸린다. 여기까지가 공통 모집단.
+    const base = useMemo(() => items.filter(i => {
+        if (query && !i.title.toLowerCase().includes(query.toLowerCase())
+            && !i.institution.toLowerCase().includes(query.toLowerCase())) return false;
+        if (swOnly && !i.isSwBiz) return false;
+        return true;
+    }), [items, query, swOnly]);
+
+    const filtered = useMemo(() => base
+        .filter(i => matchStatus(i, status) && matchSource(i, source))
+        .sort((a, b) => {
             // '의견중'은 마감 임박 순으로 모아 본다. 그 외는 최신 접수순(서버 정렬) 유지.
             if (status !== 'open') return 0;
             return (a.dday ?? 99) - (b.dday ?? 99);
-        });
-    }, [items, query, status, swOnly]);
+        }), [base, status, source]);
 
-    const counts = useMemo(() => ({
-        all: items.length,
-        open: items.filter(i => i.dday !== null && i.dday >= 0).length,
-        waiting: items.filter(i => !i.isNoticed).length,
-        noticed: items.filter(i => i.isNoticed).length
-    }), [items]);
+    // 각 드롭다운의 건수는 '다른' 필터를 적용한 뒤 센다 —
+    // 그래야 그 항목을 골랐을 때 실제로 몇 건이 남는지가 그대로 보인다.
+    const statusOpts = useMemo(() => {
+        const pool = base.filter(i => matchSource(i, source));
+        const n = (s: StatusFilter) => pool.filter(i => matchStatus(i, s)).length;
+        return [
+            { key: 'all' as const, label: '전체', n: n('all') },
+            { key: 'open' as const, label: '의견중', n: n('open') },
+            { key: 'waiting' as const, label: '공고 대기중', n: n('waiting') },
+            { key: 'noticed' as const, label: '공고 전환됨', n: n('noticed') }
+        ];
+    }, [base, source]);
+
+    const sourceOpts = useMemo(() => {
+        const pool = base.filter(i => matchStatus(i, status));
+        const n = (s: SourceFilter) => pool.filter(i => matchSource(i, s)).length;
+        return [
+            { key: 'all' as const, label: '전체', n: n('all') },
+            { key: 'pre_spec' as const, label: '사전규격', n: n('pre_spec') },
+            { key: 'order_plan' as const, label: '발주계획', n: n('order_plan') }
+        ];
+    }, [base, status]);
+
+    // 필터로 건수가 줄어 현재 페이지가 범위를 벗어나면 빈 화면이 되므로
+    // 마지막 페이지로 당겨서 쓴다.
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const curPage = Math.min(Math.max(1, page), totalPages);
+    const startIdx = (curPage - 1) * pageSize;
+    const pageItems = filtered.slice(startIdx, startIdx + pageSize);
+
+    // 페이지를 넘길 때마다 목록 머리로 올려준다 — 스크롤 위치가 남으면
+    // 새 페이지 중간부터 보이게 된다.
+    const goPage = (p: number) => {
+        setPage(Math.min(Math.max(1, p), totalPages));
+        scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    };
 
     if (loading) {
         return <div className="flex items-center justify-center h-full text-sm font-bold text-slate-400">
@@ -93,70 +142,77 @@ const PreSpecFinder = ({ resolveBid, initialStatus = 'all', domain }: Props) => 
         </div>;
     }
 
-    const tabs: { key: StatusFilter; label: string; n: number }[] = [
-        { key: 'all', label: '전체', n: counts.all },
-        { key: 'open', label: '의견중', n: counts.open },
-        { key: 'waiting', label: '공고 대기중', n: counts.waiting },
-        { key: 'noticed', label: '공고 전환됨', n: counts.noticed }
-    ];
-
     return (
-        <div className="flex flex-col h-full bg-[#F8FAFC]">
-            {/* 필터 바 */}
-            <div className="bg-white border-b border-slate-200 px-8 py-5 flex flex-col gap-4 shadow-sm z-10">
-                <div className="flex flex-wrap items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 w-64 shadow-sm">
-                        <Search size={14} className="text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="품명 · 기관 검색..."
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            className="w-full bg-transparent text-xs font-bold text-slate-600 outline-none"
-                        />
+        <div ref={scrollRef} className="h-full overflow-y-auto p-8 bg-[#F8FAFC]">
+            <div className={CARD}>
+                {/* 헤더 — 공고 리스트와 동일한 구성 */}
+                <div className="px-6 sm:px-7 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                    <div className="flex items-baseline gap-2.5">
+                        <h3 className="font-bold text-[15px] text-slate-800 tracking-tight whitespace-nowrap">
+                            사전규격 · 발주계획
+                        </h3>
+                        <span className="text-xs font-bold text-slate-400 tabular-nums whitespace-nowrap">
+                            {filtered.length}건
+                        </span>
                     </div>
 
-                    <div className="flex items-center gap-1">
-                        {tabs.map(t => (
-                            <button
-                                key={t.key}
-                                onClick={() => setStatus(t.key)}
-                                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${status === t.key
-                                    ? 'bg-blue-600 text-white shadow-sm'
-                                    : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-700'}`}
-                            >
-                                {t.label} <span className="opacity-70">{t.n}</span>
-                            </button>
-                        ))}
-                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        <FilterSelect label="상태" value={status} onChange={setStatus} options={statusOpts} />
+                        <FilterSelect label="구분" value={source} onChange={setSource} options={sourceOpts} />
 
-                    <label className="flex items-center gap-2 cursor-pointer select-none ml-auto">
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${swOnly ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
-                            {swOnly && <div className="w-2 h-2 bg-white rounded-sm" />}
-                        </div>
-                        <input type="checkbox" className="hidden" checked={swOnly}
-                            onChange={(e) => setSwOnly(e.target.checked)} />
-                        <span className="text-xs font-bold text-slate-600">SW사업만</span>
-                    </label>
+                        <label className="flex items-center gap-2 cursor-pointer select-none px-1">
+                            <div className={`w-4 h-4 rounded flex items-center justify-center transition-colors ${swOnly ? 'bg-blue-600' : 'bg-white ring-1 ring-slate-300'}`}>
+                                {swOnly && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
+                            </div>
+                            <input type="checkbox" className="hidden" checked={swOnly}
+                                onChange={(e) => setSwOnly(e.target.checked)} />
+                            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">SW사업만</span>
+                        </label>
+
+                        <SearchBox value={query} onChange={setQuery} placeholder="품명, 기관명 검색..." />
+                        <PageSizeSelect value={pageSize} onChange={setPageSize} />
+                    </div>
                 </div>
-            </div>
 
-            {/* 목록 */}
-            <div className="flex-1 overflow-auto px-8 py-6">
-                {filtered.length === 0 ? (
-                    <div className="text-center text-sm font-bold text-slate-400 py-20">
-                        조건에 맞는 항목이 없습니다.
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {filtered.map(item => (
-                            <Row
-                                key={`${item.source}-${item.id}`}
-                                item={item}
-                                resolveBid={resolveBid}
-                            />
-                        ))}
-                    </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead className={THEAD}>
+                            <tr>
+                                <th className={`${TH_FIRST} text-center`}>구분</th>
+                                <th className={TH}>품명 / 기관</th>
+                                <th className={TH_R}>사업금액</th>
+                                <th className={TH_C}>접수일</th>
+                                <th className={TH_C}>의견마감 / 발주예정</th>
+                                <th className={TH_C}>상태</th>
+                                <th className={TH_C}>링크</th>
+                            </tr>
+                        </thead>
+                        <tbody className={TBODY}>
+                            {pageItems.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} className="text-center text-sm font-bold text-slate-400 py-20">
+                                        조건에 맞는 항목이 없습니다.
+                                    </td>
+                                </tr>
+                            ) : pageItems.map(item => (
+                                <Row
+                                    key={`${item.source}-${item.id}`}
+                                    item={item}
+                                    resolveBid={resolveBid}
+                                />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                {filtered.length > 0 && (
+                    <Pagination
+                        total={filtered.length}
+                        page={curPage}
+                        pageSize={pageSize}
+                        totalPages={totalPages}
+                        onPage={goPage}
+                    />
                 )}
             </div>
         </div>
@@ -167,11 +223,11 @@ const Row = ({ item, resolveBid }: {
     item: PreSpecItem;
     resolveBid?: (n: string) => ResolvedBid | null;
 }) => {
-    const badge = ddayBadge(item.dday);
+    const dd = ddayBadge(item.dday);
     const isPlan = item.source === 'order_plan';
 
     // 참조하는 공고를 전부 개별 링크로 노출한다.
-    // 이전에는 건수만 표시하고 첫 건만 열어 나머지가 보이지 않았다.
+    // 건수만 표시하고 첫 건만 열면 나머지가 보이지 않는다.
     const refs = (item.bidRefs.length ? item.bidRefs : item.bidNtceNos.map(no => ({ no, ord: '' })))
         .map(r => {
             const resolved = resolveBid?.(r.no) ?? null;
@@ -179,95 +235,111 @@ const Row = ({ item, resolveBid }: {
         });
     const primary = refs[0];
 
+    /**
+     * 제목을 눌렀을 때 갈 곳. 입찰공고 리스트와 같은 동작을 맞춘다.
+     *
+     * 1순위는 입찰공고 상세. 아직 공고가 안 난 건은 갈 공고가 없으므로
+     * 규격서 파일로 보낸다 — 나라장터는 사전규격 상세에 대한 공개 딥링크를
+     * 제공하지 않아 이게 실제로 열 수 있는 유일한 원문이다.
+     */
+    const titleLink = primary
+        ? { url: primary.url, kind: '입찰공고 상세' }
+        : item.specDocUrls[0]
+            ? { url: item.specDocUrls[0], kind: '규격서 (공고 전이라 상세 없음)' }
+            : null;
+
+    // 기관·수요기관·담당자를 한 줄로 접는다. 표에서는 행 높이를 일정하게 두는 게 낫다.
+    const subline = [
+        item.institution,
+        item.demandInstitution && item.demandInstitution !== item.institution ? `수요 ${item.demandInstitution}` : '',
+        [item.department, item.officer, item.officerTel].filter(Boolean).join(' ')
+    ].filter(Boolean).join(' · ');
+
     return (
-        <div
-            id={`prespec-${item.id}`}
-            className="bg-white rounded-2xl border border-slate-100 p-5 transition-all hover:border-blue-200 hover:shadow-sm"
-        >
-            <div className="flex items-start gap-3">
-                <span className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold ${isPlan
-                    ? 'bg-violet-50 text-violet-600'
-                    : 'bg-blue-50 text-blue-600'}`}>
+        <tr id={`prespec-${item.id}`} className={TR}>
+            <td className={`${TD_FIRST} text-center`}>
+                <span className={badge(isPlan ? 'violet' : 'blue')}>
                     {isPlan ? '발주계획' : '사전규격'}
                 </span>
+            </td>
 
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {/* 공고 리스트와 동일하게 제목 클릭 시 나라장터 공고 상세로 이동 */}
-                        {primary ? (
-                            <a
-                                href={primary.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-bold text-slate-800 hover:text-blue-600 hover:underline transition-colors"
-                            >
-                                {item.title}
-                            </a>
-                        ) : (
-                            <h4 className="text-sm font-bold text-slate-800">{item.title}</h4>
-                        )}
-                        {badge && (
-                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${badge.cls}`}>
-                                {badge.text}
-                            </span>
-                        )}
-                        {item.isSwBiz && (
-                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-600">
-                                SW사업
-                            </span>
-                        )}
-                        {!item.isNoticed && (
-                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-600">
-                                공고 대기중
-                            </span>
-                        )}
+            <td className={`${TD} max-w-[420px]`}>
+                {titleLink ? (
+                    <a
+                        href={titleLink.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`${item.title}\n→ ${titleLink.kind}`}
+                        className="font-bold text-sm text-slate-700 line-clamp-1 hover:text-blue-600 hover:underline decoration-blue-300 underline-offset-2 transition-colors"
+                    >
+                        {item.title}
+                    </a>
+                ) : (
+                    // 열 수 있는 원문이 없다 — 눌러도 소용없다는 게 보이게 흐리게 둔다
+                    <p title={`${item.title}\n(공고 전이라 열람 가능한 원문 없음)`}
+                        className="font-bold text-sm text-slate-400 line-clamp-1">{item.title}</p>
+                )}
+                <p title={subline} className="text-xs text-slate-400 mt-0.5 line-clamp-1">{subline}</p>
+            </td>
+
+            <td className={`${TD} text-right font-bold text-sm text-slate-600 tabular-nums whitespace-nowrap`}>
+                {formatMoney(item.amount)}
+            </td>
+
+            <td className={`${TD} text-center text-sm text-slate-400 tabular-nums whitespace-nowrap`}>
+                {item.postedAt ? item.postedAt.slice(0, 10) : '-'}
+            </td>
+
+            <td className={`${TD} text-center whitespace-nowrap`}>
+                {dd ? (
+                    <div className="inline-flex items-center gap-1.5">
+                        <span className="text-sm text-slate-500 tabular-nums">
+                            {item.deadlineAt ? item.deadlineAt.slice(5, 10) : ''}
+                        </span>
+                        <span className={badge(dd.tone)}>{dd.text}</span>
                     </div>
+                ) : item.orderYm ? (
+                    <span className="text-sm font-bold text-violet-500 tabular-nums">{item.orderYm}</span>
+                ) : (
+                    <span className="text-sm text-slate-300">-</span>
+                )}
+            </td>
 
-                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-500">
-                        <span>{item.institution}</span>
-                        {item.demandInstitution && item.demandInstitution !== item.institution && (
-                            <span className="text-slate-400">수요 {item.demandInstitution}</span>
-                        )}
-                        <span className="text-slate-700">{formatMoney(item.amount)}</span>
-                        {item.postedAt && <span className="text-slate-400">{item.postedAt.slice(0, 10)}</span>}
-                        {item.orderYm && <span className="text-violet-500">발주예정 {item.orderYm}</span>}
-                    </div>
-
-                    {(item.officer || item.department) && (
-                        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-400">
-                            <Phone size={11} />
-                            <span>
-                                {[item.department, item.officer, item.officerTel].filter(Boolean).join(' · ')}
-                            </span>
-                        </div>
-                    )}
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {item.specDocUrls.slice(0, 3).map((url, idx) => (
-                            <a key={idx} href={url} target="_blank" rel="noreferrer"
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-50 text-slate-600 hover:bg-slate-100">
-                                <FileText size={11} /> 규격서 {idx + 1}
-                            </a>
-                        ))}
-                        {refs.map((r, idx) => (
-                            <a
-                                key={r.no}
-                                href={r.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                title={r.resolved?.title || r.no}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 max-w-[280px]"
-                            >
-                                <ExternalLink size={11} className="shrink-0" />
-                                <span className="truncate">
-                                    공고{refs.length > 1 ? ` ${idx + 1}` : ''} · {r.resolved?.title || r.no}
-                                </span>
-                            </a>
-                        ))}
-                    </div>
+            <td className={`${TD} text-center whitespace-nowrap`}>
+                <div className="inline-flex items-center gap-1">
+                    {item.isSwBiz && <span className={badge('emerald')}>SW</span>}
+                    <span className={badge(item.isNoticed ? 'slate' : 'amber')}>
+                        {item.isNoticed ? '공고 전환' : '공고 대기'}
+                    </span>
                 </div>
-            </div>
-        </div>
+            </td>
+
+            <td className={`${TD} text-center whitespace-nowrap`}>
+                <div className="inline-flex items-center gap-1">
+                    {item.specDocUrls.slice(0, 3).map((url, idx) => (
+                        <a key={`doc-${idx}`} href={url} target="_blank" rel="noreferrer"
+                            title={`규격서 ${idx + 1} 열기`} className={iconLink('slate')}>
+                            <FileText size={12} />
+                        </a>
+                    ))}
+                    {refs.map(r => (
+                        <a
+                            key={`bid-${r.no}`}
+                            href={r.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`공고 ${r.resolved?.title || r.no}`}
+                            className={iconLink('blue')}
+                        >
+                            <ExternalLink size={12} />
+                        </a>
+                    ))}
+                    {item.specDocUrls.length === 0 && refs.length === 0 && (
+                        <span className="text-sm text-slate-300">-</span>
+                    )}
+                </div>
+            </td>
+        </tr>
     );
 };
 
