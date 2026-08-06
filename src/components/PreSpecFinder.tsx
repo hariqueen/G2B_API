@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ExternalLink, FileText } from 'lucide-react';
+import { AlertCircle, FileText } from 'lucide-react';
 import { usePreSpecs } from '../hooks/usePreSpecs';
 import { PreSpecItem, PreSpecDomain } from '../types';
 import {
@@ -184,7 +184,7 @@ const PreSpecFinder = ({ resolveBid, initialStatus = 'all', domain }: Props) => 
                                 <th className={TH_C}>접수일</th>
                                 <th className={TH_C}>의견마감 / 발주예정</th>
                                 <th className={TH_C}>상태</th>
-                                <th className={TH_C}>링크</th>
+                                <th className={TH_C}>규격서</th>
                             </tr>
                         </thead>
                         <tbody className={TBODY}>
@@ -235,19 +235,6 @@ const Row = ({ item, resolveBid }: {
         });
     const primary = refs[0];
 
-    /**
-     * 제목을 눌렀을 때 갈 곳. 입찰공고 리스트와 같은 동작을 맞춘다.
-     *
-     * 1순위는 입찰공고 상세. 아직 공고가 안 난 건은 갈 공고가 없으므로
-     * 규격서 파일로 보낸다 — 나라장터는 사전규격 상세에 대한 공개 딥링크를
-     * 제공하지 않아 이게 실제로 열 수 있는 유일한 원문이다.
-     */
-    const titleLink = primary
-        ? { url: primary.url, kind: '입찰공고 상세' }
-        : item.specDocUrls[0]
-            ? { url: item.specDocUrls[0], kind: '규격서 (공고 전이라 상세 없음)' }
-            : null;
-
     // 기관·수요기관·담당자를 한 줄로 접는다. 표에서는 행 높이를 일정하게 두는 게 낫다.
     const subline = [
         item.institution,
@@ -264,21 +251,41 @@ const Row = ({ item, resolveBid }: {
             </td>
 
             <td className={`${TD} max-w-[420px]`}>
-                {titleLink ? (
-                    <a
-                        href={titleLink.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={`${item.title}\n→ ${titleLink.kind}`}
-                        className="font-bold text-sm text-slate-700 line-clamp-1 hover:text-blue-600 hover:underline decoration-blue-300 underline-offset-2 transition-colors"
-                    >
-                        {item.title}
-                    </a>
-                ) : (
-                    // 열 수 있는 원문이 없다 — 눌러도 소용없다는 게 보이게 흐리게 둔다
-                    <p title={`${item.title}\n(공고 전이라 열람 가능한 원문 없음)`}
-                        className="font-bold text-sm text-slate-400 line-clamp-1">{item.title}</p>
-                )}
+                <div className="flex items-center gap-1.5 min-w-0">
+                    {primary ? (
+                        <a
+                            href={primary.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={`${item.title}\n→ ${primary.resolved?.title || primary.no}`}
+                            className="font-bold text-sm text-slate-700 line-clamp-1 hover:text-blue-600 hover:underline decoration-blue-300 underline-offset-2 transition-colors"
+                        >
+                            {item.title}
+                        </a>
+                    ) : (
+                        // 아직 공고가 안 났다 — 눌러도 갈 곳이 없다는 게 보이게 흐리게 둔다
+                        <p title={`${item.title}\n(연결된 입찰공고 없음)`}
+                            className="font-bold text-sm text-slate-400 line-clamp-1">{item.title}</p>
+                    )}
+
+                    {/*
+                      공고가 여러 건 걸린 경우(전체의 17%) 제목은 첫 건으로만 간다.
+                      나머지를 여기 번호로 남긴다 — 건수만 세고 열 수는 없던 게
+                      원래 문제였으므로 전부 개별 링크로 둔다.
+                    */}
+                    {refs.slice(1).map((r, idx) => (
+                        <a
+                            key={`more-${r.no}`}
+                            href={r.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`연결된 다른 공고: ${r.resolved?.title || r.no}`}
+                            className="shrink-0 px-1.5 rounded text-[10px] font-bold leading-5 bg-blue-50 text-blue-500 ring-1 ring-blue-600/10 hover:bg-blue-600 hover:text-white transition-all"
+                        >
+                            {idx + 2}
+                        </a>
+                    ))}
+                </div>
                 <p title={subline} className="text-xs text-slate-400 mt-0.5 line-clamp-1">{subline}</p>
             </td>
 
@@ -315,29 +322,18 @@ const Row = ({ item, resolveBid }: {
             </td>
 
             <td className={`${TD} text-center whitespace-nowrap`}>
-                <div className="inline-flex items-center gap-1">
-                    {item.specDocUrls.slice(0, 3).map((url, idx) => (
-                        <a key={`doc-${idx}`} href={url} target="_blank" rel="noreferrer"
-                            title={`규격서 ${idx + 1} 열기`} className={iconLink('slate')}>
-                            <FileText size={12} />
-                        </a>
-                    ))}
-                    {refs.map(r => (
-                        <a
-                            key={`bid-${r.no}`}
-                            href={r.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            title={`공고 ${r.resolved?.title || r.no}`}
-                            className={iconLink('blue')}
-                        >
-                            <ExternalLink size={12} />
-                        </a>
-                    ))}
-                    {item.specDocUrls.length === 0 && refs.length === 0 && (
-                        <span className="text-sm text-slate-300">-</span>
-                    )}
-                </div>
+                {item.specDocUrls.length === 0 ? (
+                    <span className="text-sm text-slate-300">-</span>
+                ) : (
+                    <div className="inline-flex items-center gap-1">
+                        {item.specDocUrls.slice(0, 3).map((url, idx) => (
+                            <a key={`doc-${idx}`} href={url} target="_blank" rel="noreferrer"
+                                title={`규격서 ${idx + 1} 내려받기`} className={iconLink('slate')}>
+                                <FileText size={12} />
+                            </a>
+                        ))}
+                    </div>
+                )}
             </td>
         </tr>
     );
